@@ -73,51 +73,72 @@ with st.sidebar:
     """)
 
 # ==========================================
-# DARK MODE CSS
+
+
 # ==========================================
+# LIGHT MODE CSS
+# ==========================================
+else:# ======================================
+# DARK MODE CSS
+# ======================================
 if st.session_state.theme == "Dark":
 
     st.markdown("""
     <style>
 
+    /* MAIN APP */
     .stApp {
-        background-color: #0E1117;
+        background-color: #020817;
         color: white;
     }
 
-    h1, h2, h3, h4, h5, h6, p, label {
+    /* SIDEBAR BACKGROUND */
+    section[data-testid="stSidebar"] {
+        background-color: #0F172A;
+    }
+
+    /* SIDEBAR TEXT */
+    section[data-testid="stSidebar"] * {
         color: white !important;
     }
 
-    .stTextInput label {
+    /* INPUT LABELS */
+    label {
         color: white !important;
     }
 
-    .stNumberInput label {
-        color: white !important;
-    }
-
-    div.stButton > button {
-        background-color: #262730;
+    /* TEXT INPUT */
+    .stTextInput input {
+        background-color: #1E293B;
         color: white;
         border-radius: 10px;
+    }
+
+    /* NUMBER INPUT */
+    .stNumberInput input {
+        background-color: #1E293B;
+        color: white;
+    }
+
+    /* BUTTONS */
+    div.stButton > button {
+        background-color: #1E293B;
+        color: white;
+        border-radius: 12px;
         height: 3em;
         width: 100%;
+        border: none;
         font-size: 16px;
+        transition: 0.3s;
     }
 
     div.stButton > button:hover {
-        background-color: #3A3B3C;
+        background-color: #334155;
         color: white;
     }
 
     </style>
     """, unsafe_allow_html=True)
-
-# ==========================================
-# LIGHT MODE CSS
-# ==========================================
-else:
 
     st.markdown("""
     <style>

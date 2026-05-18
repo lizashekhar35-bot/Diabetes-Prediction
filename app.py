@@ -1002,4 +1002,4 @@ elif page == "Admin Dashboard":
 elif page == "Prediction":
     prediction_page()
 elif page == "Results":
-    results_page()\
+    results_page()

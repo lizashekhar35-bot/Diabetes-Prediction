@@ -3,6 +3,8 @@ import pandas as pd
 import pickle
 from datetime import datetime
 from io import BytesIO
+import urllib.parse
+import requests as req
 
 import plotly.graph_objects as go
 from reportlab.lib.pagesizes import A4
@@ -1013,7 +1015,7 @@ def results_page():
     show_health_suggestions(patient_data)
     st.write("")
 
-    # Action Buttons
+    # Action Buttons — row 1
     b1, b2 = st.columns(2)
     with b1:
         st.download_button(
@@ -1024,13 +1026,231 @@ def results_page():
             use_container_width=True
         )
     with b2:
-        # ✅ "New Prediction" button — data clear karke Prediction page pe wapas
         if st.button("🔁 New Prediction", use_container_width=True):
             for k in ["prediction_done", "patient_data", "prediction_result",
                       "confidence", "pdf_bytes", "prediction_time"]:
                 st.session_state[k] = defaults[k]
             st.session_state.page = "Prediction"
             st.rerun()
+
+    # ══════════════════════════════════════════════
+    # WHATSAPP SEND SECTION — TWILIO AUTOMATIC
+    # ══════════════════════════════════════════════
+    st.write("")
+    st.markdown("""
+    <div style="
+        background: linear-gradient(135deg, #dcfce7, #bbf7d0);
+        border: 2px solid #4ade80;
+        border-radius: 20px;
+        padding: 24px 28px;
+        margin-top: 8px;
+    ">
+        <div style="font-size:20px; font-weight:800; color:#14532d; margin-bottom:4px;">
+            📲 WhatsApp pe Report Bhejein — Automatically
+        </div>
+        <div style="font-size:13.5px; color:#166534; opacity:0.85;">
+            Patient ka WhatsApp number daalein — report seedha unke phone pe chala jaayega!
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.write("")
+
+    # ── Twilio Credentials Box ────────────────────────────────────
+    with st.expander("⚙️ Twilio WhatsApp Settings (pehli baar kholein aur credentials bharein)", expanded=False):
+        st.markdown("""
+        <div style="background:#fffbeb; border:1px solid #fcd34d; border-radius:12px; padding:16px 20px; margin-bottom:8px;">
+        <b>🔑 Twilio credentials kahan se milenge?</b><br>
+        1. <a href="https://www.twilio.com/try-twilio" target="_blank">twilio.com</a> pe free account banayein<br>
+        2. Console mein <b>Account SID</b> aur <b>Auth Token</b> copy karein<br>
+        3. <b>WhatsApp Sandbox</b> activate karein: Messaging → Try it out → Send a WhatsApp message<br>
+        4. Patient ko ek baar sandbox join karwaana hoga: <code>join &lt;sandbox-word&gt;</code> message <b>+1 415 523 8886</b> pe bhejna hoga
+        </div>
+        """, unsafe_allow_html=True)
+
+        cred_col1, cred_col2 = st.columns(2)
+        with cred_col1:
+            twilio_sid = st.text_input(
+                "Twilio Account SID",
+                value=st.session_state.get("twilio_sid", ""),
+                type="password",
+                placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                key="input_twilio_sid"
+            )
+        with cred_col2:
+            twilio_token = st.text_input(
+                "Twilio Auth Token",
+                value=st.session_state.get("twilio_token", ""),
+                type="password",
+                placeholder="your_auth_token_here",
+                key="input_twilio_token"
+            )
+
+        twilio_from = st.text_input(
+            "Twilio WhatsApp Sender Number",
+            value=st.session_state.get("twilio_from", "whatsapp:+14155238886"),
+            placeholder="whatsapp:+14155238886",
+            help="Sandbox ka default number: whatsapp:+14155238886",
+            key="input_twilio_from"
+        )
+
+        if st.button("💾 Credentials Save karein", use_container_width=True):
+            st.session_state.twilio_sid   = twilio_sid.strip()
+            st.session_state.twilio_token = twilio_token.strip()
+            st.session_state.twilio_from  = twilio_from.strip()
+            st.success("✅ Credentials save ho gaye!")
+
+    # ── Number Input + Send Button ────────────────────────────────
+    st.write("")
+    wa_col1, wa_col2 = st.columns([2, 1])
+    with wa_col1:
+        wa_number = st.text_input(
+            "📞 Patient WhatsApp Number (Country Code ke saath)",
+            placeholder="e.g.  +919876543210",
+            help="+ ke saath ya bina bhi chal jaayega. India: +91XXXXXXXXXX"
+        )
+    with wa_col2:
+        st.write("")
+        st.write("")
+        send_wa = st.button("🚀 WhatsApp Bhejein", use_container_width=True)
+
+    # ── Send Logic ────────────────────────────────────────────────
+    if send_wa:
+        # Validate number
+        clean_number = wa_number.strip()
+        if not clean_number:
+            st.error("❌ WhatsApp number daalna zaroori hai!")
+        else:
+            # Normalize: ensure starts with +
+            digits_only = clean_number.replace("+", "").replace(" ", "").replace("-", "")
+            if not digits_only.isdigit() or len(digits_only) < 10:
+                st.error("❌ Sahi number daalein. Example: +919876543210")
+            else:
+                to_number = f"whatsapp:+{digits_only}"
+
+                # Build WhatsApp message
+                suggestions      = get_suggestions(patient_data)
+                suggestions_text = "\n".join([f"  • {s}" for s in suggestions])
+                result_emoji     = "⚠️" if "High" in result else "✅"
+
+                wa_message = f"""🩺 *GlucoTrack — Diabetes Risk Report*
+━━━━━━━━━━━━━━━━━━━━━━
+
+👤 *Patient:* {name}
+📧 *Email:* {email}
+📅 *Date:* {pred_time[:10] if pred_time else "—"}
+🕐 *Time:* {pred_time[11:] if pred_time else "—"}
+
+━━━━━━━━━━━━━━━━━━━━━━
+{result_emoji} *Result: {result}*
+📊 *Confidence: {confidence}%*
+
+━━━━━━━━━━━━━━━━━━━━━━
+🔬 *Health Parameters:*
+  • Pregnancies: {patient_data["Pregnancies"]}
+  • Glucose: {patient_data["Glucose"]} mg/dL
+  • Blood Pressure: {patient_data["BloodPressure"]} mm Hg
+  • Skin Thickness: {patient_data["SkinThickness"]} mm
+  • Insulin: {patient_data["Insulin"]} μU/mL
+  • BMI: {patient_data["BMI"]}
+  • Diabetes Pedigree Function: {patient_data["DiabetesPedigreeFunction"]}
+  • Age: {patient_data["Age"]} years
+
+━━━━━━━━━━━━━━━━━━━━━━
+💡 *Personalized Recommendations:*
+{suggestions_text}
+
+━━━━━━━━━━━━━━━━━━━━━━
+_⚕️ Yeh report GlucoTrack ML model dwara generate ki gayi hai. Kisi bhi nidaan ke liye qualified doctor se zaroor milein._
+🌐 *GlucoTrack — Smart Diabetes Risk Prediction*"""
+
+                # ── Send via Twilio REST API (sirf requests — koi install nahi) ──
+                sid   = st.session_state.get("twilio_sid", "").strip()
+                token = st.session_state.get("twilio_token", "").strip()
+                from_ = st.session_state.get("twilio_from", "whatsapp:+14155238886").strip()
+
+                if not sid or not token:
+                    st.warning("⚠️ Twilio credentials nahi mile! Upar ⚙️ Settings mein SID aur Token daalein.")
+                    encoded = urllib.parse.quote(wa_message)
+                    wa_link = f"https://wa.me/{digits_only}?text={encoded}"
+                    st.info("Credentials ke bina bhi manually bhej sakte hain:")
+                    st.markdown(f"""
+                    <div style="text-align:center;margin-top:8px;">
+                        <a href="{wa_link}" target="_blank" style="
+                            display:inline-block;
+                            background:linear-gradient(135deg,#25D366,#128C7E);
+                            color:white; font-size:16px; font-weight:800;
+                            padding:12px 36px; border-radius:50px;
+                            text-decoration:none;
+                            box-shadow:0 6px 20px rgba(37,211,102,0.40);">
+                            📲 WhatsApp Web mein Kholein
+                        </a>
+                    </div>""", unsafe_allow_html=True)
+
+                else:
+                    # ✅ Pure requests se Twilio REST API — koi library install nahi
+                    try:
+                        api_url = f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json"
+                        response = req.post(
+                            api_url,
+                            data={"From": from_, "To": to_number, "Body": wa_message},
+                            auth=(sid, token),
+                            timeout=15
+                        )
+                        resp_json = response.json()
+
+                        if response.status_code in (200, 201):
+                            msg_sid = resp_json.get("sid", "—")
+                            st.markdown(f"""
+                            <div style="
+                                background: linear-gradient(135deg, #dcfce7, #bbf7d0);
+                                border: 2px solid #16a34a;
+                                border-radius: 16px;
+                                padding: 20px 24px;
+                                text-align: center;
+                                margin-top: 10px;
+                            ">
+                                <div style="font-size:36px;">✅</div>
+                                <div style="font-size:18px; font-weight:800; color:#14532d; margin:6px 0;">
+                                    Report Successfully Bhej Diya Gaya!
+                                </div>
+                                <div style="font-size:14px; color:#166534;">
+                                    📲 <b>{clean_number}</b> pe WhatsApp message deliver ho gaya hai.<br>
+                                    <small style="opacity:0.7;">Message SID: {msg_sid}</small>
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        else:
+                            err_code = resp_json.get("code", 0)
+                            err_msg  = resp_json.get("message", response.text)
+                            st.error(f"❌ WhatsApp nahi gaya: {err_msg}")
+                            if err_code == 21608 or "unverified" in str(err_msg).lower():
+                                st.info("💡 **Fix:** Patient ko pehle Sandbox join karwana hoga.\nUnhe yeh message bhejwayen: `join <sandbox-word>` → `+1 415 523 8886` pe")
+                            elif err_code == 20003 or "authenticate" in str(err_msg).lower():
+                                st.info("💡 **Fix:** Account SID ya Auth Token galat hai. Twilio Console se dobara copy karein.")
+                            elif err_code == 21211 or "invalid" in str(err_msg).lower():
+                                st.info("💡 **Fix:** Number format galat hai. Example: +919876543210")
+                            encoded = urllib.parse.quote(wa_message)
+                            wa_link = f"https://wa.me/{digits_only}?text={encoded}"
+                            st.markdown(f"""
+                            <div style="text-align:center;margin-top:12px;">
+                                <p style="font-size:13px;color:#6b7280;">Manually bhi bhej sakte hain:</p>
+                                <a href="{wa_link}" target="_blank" style="
+                                    display:inline-block;
+                                    background:linear-gradient(135deg,#25D366,#128C7E);
+                                    color:white; font-size:15px; font-weight:800;
+                                    padding:12px 32px; border-radius:50px;
+                                    text-decoration:none;">
+                                    📲 WhatsApp Web se Bhejen
+                                </a>
+                            </div>""", unsafe_allow_html=True)
+
+                    except req.exceptions.ConnectionError:
+                        st.error("❌ Internet connection nahi hai ya Twilio server unreachable hai.")
+                    except req.exceptions.Timeout:
+                        st.error("❌ Request timeout ho gayi. Dobara try karein.")
+                    except Exception as e:
+                        st.error(f"❌ Unexpected error: {e}")
 
     st.write("")
     st.caption("⚕️ This prediction is generated by a Machine Learning model and does not replace professional medical advice.")

@@ -1013,7 +1013,7 @@ def results_page():
     show_health_suggestions(patient_data)
     st.write("")
 
-    # Action Buttons
+    # Action Buttons — row 1
     b1, b2 = st.columns(2)
     with b1:
         st.download_button(
@@ -1024,13 +1024,123 @@ def results_page():
             use_container_width=True
         )
     with b2:
-        # ✅ "New Prediction" button — data clear karke Prediction page pe wapas
         if st.button("🔁 New Prediction", use_container_width=True):
             for k in ["prediction_done", "patient_data", "prediction_result",
                       "confidence", "pdf_bytes", "prediction_time"]:
                 st.session_state[k] = defaults[k]
             st.session_state.page = "Prediction"
             st.rerun()
+
+    # ══════════════════════════════════════════════
+    # WHATSAPP SHARE SECTION
+    # ══════════════════════════════════════════════
+    st.write("")
+    st.markdown(f"""
+    <div style="
+        background: linear-gradient(135deg, #dcfce7, #bbf7d0);
+        border: 2px solid #4ade80;
+        border-radius: 20px;
+        padding: 24px 28px;
+        margin-top: 8px;
+    ">
+        <div style="font-size:20px; font-weight:800; color:#14532d; margin-bottom:4px;">
+            📲 WhatsApp pe Report Share karein
+        </div>
+        <div style="font-size:13.5px; color:#166534; opacity:0.85;">
+            Mobile number daalein — ek click mein WhatsApp pe poora report ready ho jaayega
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.write("")
+    wa_col1, wa_col2 = st.columns([2, 1])
+    with wa_col1:
+        wa_number = st.text_input(
+            "📞 WhatsApp Number (Country Code ke saath)",
+            placeholder="e.g.  91XXXXXXXXXX  (India ke liye 91 se shuru karein)",
+            help="Country code lagaayein, + ya spaces mat daalein. India: 91XXXXXXXXXX"
+        )
+    with wa_col2:
+        st.write("")
+        st.write("")
+        send_wa = st.button("💬 WhatsApp pe Bhejen", use_container_width=True)
+
+    if send_wa:
+        # Clean number — remove +, spaces, dashes
+        clean_number = wa_number.strip().replace("+", "").replace(" ", "").replace("-", "")
+
+        if not clean_number or not clean_number.isdigit():
+            st.error("❌ Sahi WhatsApp number daалein (sirf digits, country code ke saath). Example: 919876543210")
+        elif len(clean_number) < 10 or len(clean_number) > 15:
+            st.error("❌ Number 10–15 digits ka hona chahiye (country code ke saath). Example: 919876543210")
+        else:
+            # Build suggestions text
+            suggestions = get_suggestions(patient_data)
+            suggestions_text = "\n".join([f"  • {s}" for s in suggestions])
+
+            # Result emoji
+            result_emoji = "⚠️" if "High" in result else "✅"
+
+            # Full report message
+            wa_message = f"""🩺 *GlucoTrack — Diabetes Risk Report*
+━━━━━━━━━━━━━━━━━━━━━━
+
+👤 *Patient:* {name}
+📧 *Email:* {email}
+📅 *Date:* {pred_time[:10] if pred_time else "—"}
+🕐 *Time:* {pred_time[11:] if pred_time else "—"}
+
+━━━━━━━━━━━━━━━━━━━━━━
+{result_emoji} *Result: {result}*
+📊 *Confidence: {confidence}%*
+
+━━━━━━━━━━━━━━━━━━━━━━
+🔬 *Health Parameters:*
+  • Pregnancies: {patient_data["Pregnancies"]}
+  • Glucose: {patient_data["Glucose"]} mg/dL
+  • Blood Pressure: {patient_data["BloodPressure"]} mm Hg
+  • Skin Thickness: {patient_data["SkinThickness"]} mm
+  • Insulin: {patient_data["Insulin"]} μU/mL
+  • BMI: {patient_data["BMI"]}
+  • Diabetes Pedigree Function: {patient_data["DiabetesPedigreeFunction"]}
+  • Age: {patient_data["Age"]} years
+
+━━━━━━━━━━━━━━━━━━━━━━
+💡 *Personalized Recommendations:*
+{suggestions_text}
+
+━━━━━━━━━━━━━━━━━━━━━━
+_⚕️ Yeh report GlucoTrack ML model dwara generate ki gayi hai. Kisi bhi nidaan ke liye qualified doctor se zaroor milein._
+
+🌐 *GlucoTrack — Smart Diabetes Risk Prediction*"""
+
+            import urllib.parse
+            encoded_msg = urllib.parse.quote(wa_message)
+            wa_link = f"https://wa.me/{clean_number}?text={encoded_msg}"
+
+            # Show success + open button
+            st.success(f"✅ Report ready hai! Neeche button click karein — WhatsApp khul jaayega.")
+            st.markdown(f"""
+            <div style="text-align:center; margin-top:10px;">
+                <a href="{wa_link}" target="_blank" style="
+                    display: inline-block;
+                    background: linear-gradient(135deg, #25D366, #128C7E);
+                    color: white;
+                    font-size: 17px;
+                    font-weight: 800;
+                    padding: 14px 40px;
+                    border-radius: 50px;
+                    text-decoration: none;
+                    box-shadow: 0 6px 20px rgba(37,211,102,0.40);
+                    letter-spacing: 0.5px;
+                ">
+                    📲 WhatsApp mein Kholein &amp; Bhejein
+                </a>
+            </div>
+            <p style="text-align:center; font-size:12px; color:#6b7280; margin-top:10px;">
+                Button click karne par WhatsApp Web / App khulega — sirf Send dabana hoga
+            </p>
+            """, unsafe_allow_html=True)
 
     st.write("")
     st.caption("⚕️ This prediction is generated by a Machine Learning model and does not replace professional medical advice.")

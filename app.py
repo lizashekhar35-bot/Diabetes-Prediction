@@ -830,12 +830,33 @@ def show_health_suggestions(patient_data):
 def prediction_page():
     st.title("🩺 Diabetes Risk Prediction")
 
-    name = st.session_state.current_user_name
-    email = st.session_state.current_user_email
-    if name:
-        st.info(f"👤 Predicting for: **{name}** ({email})")
+    # ── Patient Info Section ──────────────────────────────────────
+    st.markdown("### 👤 Patient Information")
+    st.caption("Aap neeche apna naam aur email edit / type kar sakte hain.")
 
-    st.write("Fill in your clinical health parameters below:")
+    pinfo_col1, pinfo_col2 = st.columns(2)
+    with pinfo_col1:
+        patient_name_input = st.text_input(
+            "Patient Full Name",
+            value=st.session_state.current_user_name,
+            placeholder="Apna poora naam likhein...",
+        )
+    with pinfo_col2:
+        patient_email_input = st.text_input(
+            "Patient Email ID",
+            value=st.session_state.current_user_email,
+            placeholder="example@email.com",
+        )
+
+    # Validate name not empty
+    if not patient_name_input.strip():
+        st.warning("⚠️ Patient ka naam daalna zaroori hai report ke liye.")
+
+    st.markdown("---")
+    # ── Clinical Parameters ───────────────────────────────────────
+    st.markdown("### 🔬 Clinical Health Parameters")
+    st.write("Neeche apni health values fill karein:")
+
     col1, col2 = st.columns(2)
 
     with col1:
@@ -852,6 +873,18 @@ def prediction_page():
 
     st.write("")
     if st.button("🔍 Predict Diabetes Risk", use_container_width=True):
+
+        # Name validation before prediction
+        if not patient_name_input.strip():
+            st.error("❌ Pehle Patient ka naam daalna zaroori hai!")
+            st.stop()
+
+        # ✅ User ne jo naam/email diya, woh use karo (session update bhi)
+        final_name  = patient_name_input.strip()
+        final_email = patient_email_input.strip()
+        st.session_state.current_user_name  = final_name
+        st.session_state.current_user_email = final_email
+
         patient_data = {
             "Pregnancies": preg, "Glucose": glucose,
             "BloodPressure": bp, "SkinThickness": skin,
@@ -883,7 +916,6 @@ def prediction_page():
 
         pred_time = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
 
-        # ✅ Saara data session state mein save karo
         st.session_state.prediction_done   = True
         st.session_state.patient_data      = patient_data
         st.session_state.prediction_result = result
@@ -891,12 +923,11 @@ def prediction_page():
         st.session_state.prediction_time   = pred_time
         st.session_state.pdf_bytes = generate_pdf_report(
             patient_data, result, confidence,
-            st.session_state.current_user_name,
-            st.session_state.current_user_email,
+            final_name,
+            final_email,
             pred_time
         )
 
-        # ✅ KEY FIX: page set karo aur turant rerun — sidebar override nahi karega
         st.session_state.page = "Results"
         st.rerun()
 

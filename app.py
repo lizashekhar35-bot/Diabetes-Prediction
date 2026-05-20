@@ -53,7 +53,6 @@ defaults = {
     "current_user_name": "",
     "current_user_email": "",
     "prediction_time": None,
-    "dark_mode": False,
 }
 
 for key, value in defaults.items():
@@ -63,149 +62,70 @@ for key, value in defaults.items():
 # ==============================
 # THEME
 # ==============================
-dark_mode = st.session_state.dark_mode
+dark_mode = False
+if st.session_state.started:
+    dark_mode = st.sidebar.toggle("🌙 Dark Mode")
 
 if dark_mode:
-    bg            = "#023047"
-    card          = "#126782"
-    text          = "#FFFFFF"
-    accent        = "#8ECAE6"
-    input_text    = "#FFFFFF"
-    sidebar_bg    = "#1A2E2A"
-    sidebar_text  = "#FFFFFF"
+    bg = "#023047"
+    card = "#126782"
+    text = "#FFFFFF"
+    accent = "#8ECAE6"
+    input_text = "#FFFFFF"
+    sidebar_bg = "linear-gradient(180deg, #012A3A, #023047, #126782)"
     plot_template = "plotly_dark"
-    feature_bg1   = "linear-gradient(135deg, #0C3547, #0A4A6E)"
-    feature_bg2   = "linear-gradient(135deg, #0C3D1E, #0A4D28)"
-    feature_bg3   = "linear-gradient(135deg, #3D2E00, #4D3A00)"
-    feature_txt1  = "#8ECAE6"
-    feature_txt2  = "#86EFAC"
-    feature_txt3  = "#FDE68A"
-    step_bg       = "rgba(255,255,255,0.07)"
-    step_border   = "rgba(255,255,255,0.15)"
-    step_txt      = "#FFFFFF"
-    radio_bg      = "rgba(255,255,255,0.08)"
-    radio_hover   = "rgba(255,255,255,0.18)"
-    radio_selected= "rgba(255,255,255,0.22)"
+    feature_bg1 = "linear-gradient(135deg, #0C3547, #0A4A6E)"
+    feature_bg2 = "linear-gradient(135deg, #0C3D1E, #0A4D28)"
+    feature_bg3 = "linear-gradient(135deg, #3D2E00, #4D3A00)"
+    feature_txt1 = "#8ECAE6"
+    feature_txt2 = "#86EFAC"
+    feature_txt3 = "#FDE68A"
+    step_bg = "rgba(255,255,255,0.07)"
+    step_border = "rgba(255,255,255,0.15)"
+    step_txt = "#FFFFFF"
 else:
-    bg            = "#F0F8FF"
-    card          = "#FFFFFF"
-    text          = "#1E293B"
-    accent        = "#0284C7"
-    input_text    = "#1E293B"
-    sidebar_bg    = "#E8F5F0"
-    sidebar_text  = "#1E293B"
+    bg = "#F0F8FF"
+    card = "#FFFFFF"
+    text = "#1E293B"
+    accent = "#0284C7"
+    input_text = "#1E293B"
+    sidebar_bg = "linear-gradient(180deg, #8ECAE6, #219EBC)"
     plot_template = "plotly_white"
-    feature_bg1   = "linear-gradient(135deg, #E0F2FE, #BAE6FD)"
-    feature_bg2   = "linear-gradient(135deg, #DCFCE7, #BBF7D0)"
-    feature_bg3   = "linear-gradient(135deg, #FEF9C3, #FDE68A)"
-    feature_txt1  = "#075985"
-    feature_txt2  = "#166534"
-    feature_txt3  = "#854D0E"
-    step_bg       = "rgba(2,132,199,0.07)"
-    step_border   = "rgba(2,132,199,0.18)"
-    step_txt      = "#1E293B"
-    radio_bg      = "rgba(0,0,0,0.03)"
-    radio_hover   = "rgba(0,0,0,0.07)"
-    radio_selected= "rgba(0,0,0,0.06)"
+    feature_bg1 = "linear-gradient(135deg, #E0F2FE, #BAE6FD)"
+    feature_bg2 = "linear-gradient(135deg, #DCFCE7, #BBF7D0)"
+    feature_bg3 = "linear-gradient(135deg, #FEF9C3, #FDE68A)"
+    feature_txt1 = "#075985"
+    feature_txt2 = "#166534"
+    feature_txt3 = "#854D0E"
+    step_bg = "rgba(2,132,199,0.07)"
+    step_border = "rgba(2,132,199,0.18)"
+    step_txt = "#1E293B"
 
 # ==============================
 # CSS
 # ==============================
 st.markdown(f"""
 <style>
-/* MAIN APP */
 .stApp {{
     background: {bg};
     color: {text};
 }}
-
-/* SIDEBAR */
 section[data-testid="stSidebar"] {{
     background: {sidebar_bg} !important;
-    border-right: 1px solid rgba(0,0,0,0.08);
 }}
-section[data-testid="stSidebar"] > div {{
-    background: transparent !important;
-    padding-top: 0 !important;
-}}
-section[data-testid="stSidebar"] *:not(button):not(button *) {{
-    color: {sidebar_text} !important;
-}}
+section[data-testid="stSidebar"] > div {{ background: transparent; }}
+section[data-testid="stSidebar"] * {{ color: white !important; }}
 
-/* HIDE radio group's own label (we use custom HTML label) */
-section[data-testid="stSidebar"] div[data-testid="stRadio"] > label {{
-    display: none !important;
+div[data-testid="stRadio"] label {{
+    background: rgba(255,255,255,0.14);
+    padding: 12px 16px;
+    border-radius: 14px;
+    margin-bottom: 8px;
+    font-weight: 600;
+    display: block;
 }}
+div[data-testid="stRadio"] label:hover {{ background: rgba(255,255,255,0.28); }}
 
-/* RADIO OPTION BOXES */
-section[data-testid="stSidebar"] div[data-testid="stRadio"] div[role="radiogroup"] label {{
-    background: {radio_bg} !important;
-    border-radius: 12px !important;
-    padding: 13px 16px !important;
-    margin-bottom: 8px !important;
-    font-weight: 600 !important;
-    font-size: 15px !important;
-    display: flex !important;
-    align-items: center !important;
-    cursor: pointer !important;
-    transition: background 0.2s !important;
-    border: 1px solid rgba(0,0,0,0.06) !important;
-    color: {sidebar_text} !important;
-    letter-spacing: 0 !important;
-    text-transform: none !important;
-    opacity: 1 !important;
-}}
-section[data-testid="stSidebar"] div[data-testid="stRadio"] div[role="radiogroup"] label:hover {{
-    background: {radio_hover} !important;
-}}
-section[data-testid="stSidebar"] div[data-testid="stRadio"] div[role="radiogroup"] label:has(input:checked) {{
-    background: {radio_selected} !important;
-    border: 1.5px solid rgba(2,132,199,0.35) !important;
-}}
-section[data-testid="stSidebar"] div[data-testid="stRadio"] div[role="radiogroup"] input[type="radio"] {{
-    accent-color: #0284C7;
-    width: 18px;
-    height: 18px;
-    margin-right: 10px;
-    flex-shrink: 0;
-}}
-
-/* DARK MODE CHECKBOX */
-section[data-testid="stSidebar"] div[data-testid="stCheckbox"] label {{
-    background: {radio_bg} !important;
-    border-radius: 12px !important;
-    padding: 12px 16px !important;
-    font-weight: 600 !important;
-    font-size: 15px !important;
-    display: flex !important;
-    align-items: center !important;
-    border: 1px solid rgba(0,0,0,0.06) !important;
-    cursor: pointer !important;
-    color: {sidebar_text} !important;
-    opacity: 1 !important;
-    letter-spacing: 0 !important;
-    text-transform: none !important;
-}}
-
-/* LOGOUT BUTTON */
-section[data-testid="stSidebar"] div[data-testid="stButton"] button {{
-    background: linear-gradient(135deg, #2D6A4F, #D4A017) !important;
-    color: white !important;
-    border-radius: 14px !important;
-    padding: 14px 20px !important;
-    border: none !important;
-    font-weight: 700 !important;
-    font-size: 16px !important;
-    width: 100% !important;
-    box-shadow: 0 4px 18px rgba(0,0,0,0.18) !important;
-    letter-spacing: 0.5px !important;
-}}
-section[data-testid="stSidebar"] div[data-testid="stButton"] button:hover {{
-    background: linear-gradient(135deg, #1B4D38, #B8860B) !important;
-    color: white !important;
-}}
-
-/* INPUTS */
 .stTextInput input, .stNumberInput input, .stTextArea textarea {{
     background-color: {card} !important;
     color: {input_text} !important;
@@ -223,7 +143,6 @@ div[data-baseweb="select"] > div {{
 }}
 div[data-baseweb="select"] * {{ color: {input_text} !important; }}
 
-/* HERO */
 .hero-wrap {{
     background: linear-gradient(135deg, #0EA5E9 0%, #8B5CF6 50%, #EC4899 100%);
     padding: 60px 40px 50px;
@@ -277,30 +196,15 @@ div[data-baseweb="select"] * {{ color: {input_text} !important; }}
     color: rgba(255,255,255,0.80) !important;
     font-weight: 500;
 }}
-
-/* FEATURE CARDS - EQUAL HEIGHT */
-.features-row {{
-    display: flex;
-    gap: 24px;
-    align-items: stretch;
-}}
 .feat-card {{
     border-radius: 24px;
     padding: 32px 26px;
     box-shadow: 0 8px 32px rgba(0,0,0,0.09);
-    display: flex;
-    flex-direction: column;
     height: 100%;
-    box-sizing: border-box;
 }}
 .feat-icon {{ font-size: 48px; margin-bottom: 12px; display: block; }}
 .feat-title {{ font-size: 19px; font-weight: 800; margin-bottom: 12px; }}
-.feat-desc {{
-    font-size: 14.5px;
-    line-height: 1.7;
-    opacity: 0.92;
-    flex: 1;
-}}
+.feat-desc {{ font-size: 14.5px; line-height: 1.7; opacity: 0.92; }}
 .feat-tag {{
     display: inline-block;
     font-size: 11px;
@@ -312,11 +216,9 @@ div[data-baseweb="select"] * {{ color: {input_text} !important; }}
     margin-bottom: 14px;
     background: rgba(255,255,255,0.35);
 }}
-
 .section-heading {{ text-align: center; margin: 48px 0 8px; }}
 .section-heading h2 {{ font-size: 32px; font-weight: 900; color: {text} !important; }}
 .section-heading p {{ font-size: 16px; color: {text} !important; opacity: 0.65; margin-top: 4px; }}
-
 .step-card {{
     background: {step_bg};
     border: 1.5px solid {step_border};
@@ -328,7 +230,6 @@ div[data-baseweb="select"] * {{ color: {input_text} !important; }}
 .step-num {{ font-size: 36px; font-weight: 900; color: {accent} !important; margin-bottom: 8px; }}
 .step-title {{ font-size: 15px; font-weight: 700; color: {step_txt} !important; margin-bottom: 6px; }}
 .step-desc {{ font-size: 13px; color: {step_txt} !important; opacity: 0.75; line-height: 1.5; }}
-
 .result-high {{
     background: linear-gradient(135deg, #FFE4E6, #FECDD3);
     color: #BE123C !important;
@@ -421,7 +322,7 @@ div[data-baseweb="select"] * {{ color: {input_text} !important; }}
 
 
 # ==============================
-# WHATSAPP PDF SHARE
+# WHATSAPP PDF FILE SHARE BUTTON
 # ==============================
 def build_whatsapp_file_share_button(pdf_bytes, file_name, caption):
     pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
@@ -430,12 +331,18 @@ def build_whatsapp_file_share_button(pdf_bytes, file_name, caption):
     <div style="margin-top:12px;">
       <button id="sharePdfBtn" style="
         background:linear-gradient(135deg,#16A34A,#22C55E);
-        color:white; border:none; padding:12px 20px; border-radius:12px;
-        cursor:pointer; font-weight:700; font-size:15px;
-        box-shadow:0 8px 20px rgba(34,197,94,0.25); font-family:Arial,sans-serif;">
+        color:white;
+        border:none;
+        padding:12px 20px;
+        border-radius:12px;
+        cursor:pointer;
+        font-weight:700;
+        font-size:15px;
+        box-shadow:0 8px 20px rgba(34,197,94,0.25);
+        font-family:Arial, sans-serif;">
         📎 Share PDF File on WhatsApp
       </button>
-      <p id="shareStatus" style="font-family:Arial,sans-serif;font-size:13px;color:#475569;margin-top:8px;"></p>
+      <p id="shareStatus" style="font-family:Arial, sans-serif; font-size:13px; color:#475569; margin-top:8px;"></p>
     </div>
     <script>
     const btn = document.getElementById('sharePdfBtn');
@@ -445,17 +352,25 @@ def build_whatsapp_file_share_button(pdf_bytes, file_name, caption):
         const b64 = "{pdf_b64}";
         const byteCharacters = atob(b64);
         const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i);
-        const byteArray = new Uint8Array(byteNumbers);
-        const file = new File([byteArray], "{file_name}", {{type:'application/pdf'}});
-        if (navigator.canShare && navigator.canShare({{files:[file]}})) {{
-          await navigator.share({{title:'GlucoTrack Diabetes Report', text:`{safe_caption}`, files:[file]}});
-          status.innerText = 'Share panel opened. Select WhatsApp to send the PDF.';
-        }} else {{
-          status.innerText = 'Direct sharing not supported. Please download and share manually.';
+        for (let i = 0; i < byteCharacters.length; i++) {{
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
         }}
-      }} catch(err) {{
-        if (err.name !== 'AbortError') status.innerText = 'Sharing not supported in this browser.';
+        const byteArray = new Uint8Array(byteNumbers);
+        const file = new File([byteArray], "{file_name}", {{type: 'application/pdf'}});
+        if (navigator.canShare && navigator.canShare({{ files: [file] }})) {{
+          await navigator.share({{
+            title: 'GlucoTrack Diabetes Report',
+            text: `{safe_caption}`,
+            files: [file]
+          }});
+          status.innerText = 'Share panel opened. Select WhatsApp to send the PDF file.';
+        }} else {{
+          status.innerText = 'Your browser does not support direct PDF file sharing. Please download the report and attach it manually in WhatsApp.';
+        }}
+      }} catch (err) {{
+        if (err.name !== 'AbortError') {{
+          status.innerText = 'PDF file sharing is not supported in this browser. Please download the report and attach it in WhatsApp.';
+        }}
       }}
     }};
     </script>
@@ -499,14 +414,11 @@ def home_page():
     """, unsafe_allow_html=True)
     st.write("")
 
-    # EQUAL HEIGHT FEATURE CARDS using st.columns + min-height trick
     col1, col2, col3 = st.columns(3, gap="large")
-
-    card_min_height = "360px"
 
     with col1:
         st.markdown(f"""
-        <div class="feat-card" style="background:{feature_bg1}; min-height:{card_min_height};">
+        <div class="feat-card" style="background:{feature_bg1};">
             <span class="feat-tag" style="color:{feature_txt1};">Machine Learning</span>
             <span class="feat-icon">🤖</span>
             <div class="feat-title" style="color:{feature_txt1};">ML-Based Diabetes Risk Prediction</div>
@@ -524,7 +436,7 @@ def home_page():
 
     with col2:
         st.markdown(f"""
-        <div class="feat-card" style="background:{feature_bg2}; min-height:{card_min_height};">
+        <div class="feat-card" style="background:{feature_bg2};">
             <span class="feat-tag" style="color:{feature_txt2};">Analytics</span>
             <span class="feat-icon">📊</span>
             <div class="feat-title" style="color:{feature_txt2};">Patient Health Analytics</div>
@@ -534,16 +446,15 @@ def home_page():
                 <br><br>
                 See all key vitals — glucose, blood pressure, insulin, BMI —
                 in a clean <strong>graphical dashboard</strong> with color-coded
-                healthy vs risk zones for <em>data-driven</em> decisions with your doctor.
-                <br><br>
-                Track changes and share reports with your healthcare provider easily.
+                healthy vs risk zones, so you can make <em>data-driven</em>
+                decisions with your doctor.
             </div>
         </div>
         """, unsafe_allow_html=True)
 
     with col3:
         st.markdown(f"""
-        <div class="feat-card" style="background:{feature_bg3}; min-height:{card_min_height};">
+        <div class="feat-card" style="background:{feature_bg3};">
             <span class="feat-tag" style="color:{feature_txt3};">Personalized</span>
             <span class="feat-icon">💡</span>
             <div class="feat-title" style="color:{feature_txt3};">Personalized Health Suggestions</div>
@@ -569,10 +480,10 @@ def home_page():
 
     s1, s2, s3, s4 = st.columns(4, gap="medium")
     steps = [
-        ("01", "Create Account",  "Sign up with your name and email to create your secure patient profile"),
-        ("02", "Enter Health Data","Fill in your clinical values like glucose, BMI, blood pressure, and age"),
-        ("03", "Get Prediction",   "ML model instantly calculates your diabetes risk with a confidence score"),
-        ("04", "View & Download",  "See analytics, personalized suggestions, and download your full PDF report"),
+        ("01", "Create Account", "Sign up with your name and email to create your secure patient profile"),
+        ("02", "Enter Health Data", "Fill in your clinical values like glucose, BMI, blood pressure, and age"),
+        ("03", "Get Prediction", "ML model instantly calculates your diabetes risk with a confidence score"),
+        ("04", "View & Download", "See analytics, personalized suggestions, and download your full PDF report"),
     ]
     for col, (num, title, desc) in zip([s1, s2, s3, s4], steps):
         with col:
@@ -586,6 +497,7 @@ def home_page():
 
     st.write("")
     st.write("")
+
     _, mid, _ = st.columns([1.5, 1, 1.5])
     with mid:
         if st.button("🚀 Get Started Now", use_container_width=True):
@@ -604,88 +516,49 @@ if not st.session_state.started:
 
 
 # ==============================
-# SIDEBAR — SINGLE "Navigation" label, no box, no duplicate
+# SIDEBAR
 # ==============================
-with st.sidebar:
+st.sidebar.markdown("## 🩺 GLUCOTRACK")
+st.sidebar.caption("Smart Health Dashboard")
+st.sidebar.markdown("---")
 
-    # Logo + Title
-    st.markdown(f"""
-    <div style="display:flex;align-items:center;gap:10px;padding:20px 4px 2px 4px;">
-        <span style="font-size:30px;">🩺</span>
-        <span style="font-size:21px;font-weight:900;color:{sidebar_text};letter-spacing:1px;">GLUCOTRACK</span>
-    </div>
-    <p style="font-size:11px;font-weight:700;letter-spacing:2px;color:{sidebar_text};opacity:0.55;
-              text-transform:uppercase;margin:0 0 14px 4px;">Smart Health Dashboard</p>
-    <hr style="border:none;border-top:1px solid rgba(0,0,0,0.1);margin:0 0 14px 0;">
-    """, unsafe_allow_html=True)
+if st.session_state.logged_in:
+    st.sidebar.success(f"👤 {st.session_state.current_user_name or st.session_state.role}")
 
-    # Logged-in user badge
-    if st.session_state.logged_in:
-        uname = st.session_state.current_user_name or st.session_state.role
-        st.markdown(f"""
-        <div style="background:rgba(2,132,199,0.12);border-radius:12px;padding:10px 14px;
-                    margin-bottom:14px;display:flex;align-items:center;gap:8px;">
-            <span style="font-size:20px;">👤</span>
-            <span style="font-size:14px;font-weight:700;color:{sidebar_text};">{uname}</span>
-        </div>
-        """, unsafe_allow_html=True)
-
-    # Single "Navigation" heading — only from HTML, radio label hidden via CSS
-    st.markdown(f"""
-    <p style="font-size:12px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;
-              color:{sidebar_text};opacity:0.6;margin-bottom:8px;">Navigation</p>
-    """, unsafe_allow_html=True)
-
-    # Build menu
-    if st.session_state.logged_in:
-        if st.session_state.role == "Admin":
-            menu_options = ["Admin Dashboard", "Prediction", "Results"]
-        else:
-            menu_options = ["Prediction", "Results"]
+if st.session_state.logged_in:
+    if st.session_state.role == "Admin":
+        menu_options = ["Admin Dashboard", "Prediction", "Results"]
     else:
-        menu_options = ["User Login", "Sign Up", "Admin Login"]
+        menu_options = ["Prediction", "Results"]
+else:
+    menu_options = ["User Login", "Sign Up", "Admin Login"]
 
-    current_page = st.session_state.page
-    if current_page not in menu_options:
-        current_page = menu_options[0]
-        st.session_state.page = current_page
-    current_index = menu_options.index(current_page)
+current_page = st.session_state.page
+if current_page not in menu_options:
+    current_page = menu_options[0]
+    st.session_state.page = current_page
 
-    # label_visibility="hidden" — radio ka apna label completely hidden
-    # CSS ne usse display:none bhi kar rakha hai — double sure
-    selected_page = st.radio(
-        "Navigation",
-        menu_options,
-        index=current_index,
-        label_visibility="hidden"
-    )
+current_index = menu_options.index(current_page)
 
-    if selected_page != st.session_state.page:
-        st.session_state.page = selected_page
+selected_page = st.sidebar.radio(
+    "",
+    menu_options,
+    index=current_index,
+    label_visibility="collapsed"
+)
+
+if selected_page != st.session_state.page:
+    st.session_state.page = selected_page
+    st.rerun()
+
+if st.session_state.logged_in:
+    if st.sidebar.button("🚪 Logout"):
+        for k in ["logged_in", "role", "prediction_done", "patient_data",
+                  "prediction_result", "confidence", "pdf_bytes",
+                  "current_user_name", "current_user_email", "prediction_time"]:
+            st.session_state[k] = defaults[k]
+        st.session_state.page = "User Login"
         st.rerun()
-
-    st.markdown(f"""
-    <hr style="border:none;border-top:1px solid rgba(0,0,0,0.1);margin:14px 0 10px 0;">
-    """, unsafe_allow_html=True)
-
-    # Dark Mode checkbox
-    new_dark = st.checkbox("🌙  Dark Mode", value=st.session_state.dark_mode)
-    if new_dark != st.session_state.dark_mode:
-        st.session_state.dark_mode = new_dark
-        st.rerun()
-
-    st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
-
-    # Logout
-    if st.session_state.logged_in:
-        if st.button("Logout", use_container_width=True):
-            for k in ["logged_in", "role", "prediction_done", "patient_data",
-                      "prediction_result", "confidence", "pdf_bytes",
-                      "current_user_name", "current_user_email", "prediction_time"]:
-                st.session_state[k] = defaults[k]
-            st.session_state.started = False
-            st.session_state.page = "User Login"
-            st.rerun()
 
 
 # ==============================
@@ -698,11 +571,11 @@ def user_login():
     if st.button("Login"):
         users = st.session_state.users
         if email in users and users[email]["password"] == password:
-            st.session_state.logged_in           = True
-            st.session_state.role                = "User"
-            st.session_state.current_user_name   = users[email]["name"]
-            st.session_state.current_user_email  = email
-            st.session_state.page                = "Prediction"
+            st.session_state.logged_in = True
+            st.session_state.role = "User"
+            st.session_state.current_user_name  = users[email]["name"]
+            st.session_state.current_user_email = email
+            st.session_state.page = "Prediction"
             st.rerun()
         else:
             st.error("Invalid email ID or password.")
@@ -741,11 +614,11 @@ def admin_login():
     password = st.text_input("Admin Password", type="password")
     if st.button("Admin Login"):
         if email in st.session_state.admins and st.session_state.admins[email] == password:
-            st.session_state.logged_in           = True
-            st.session_state.role                = "Admin"
-            st.session_state.current_user_name   = "Admin"
-            st.session_state.current_user_email  = email
-            st.session_state.page                = "Admin Dashboard"
+            st.session_state.logged_in = True
+            st.session_state.role = "Admin"
+            st.session_state.current_user_name  = "Admin"
+            st.session_state.current_user_email = email
+            st.session_state.page = "Admin Dashboard"
             st.rerun()
         else:
             st.error("Invalid admin email or password.")
@@ -755,8 +628,8 @@ def admin_dashboard():
     st.title("🛡️ Admin Dashboard")
     col1, col2, col3 = st.columns(3)
     col1.metric("Registered Users", len(st.session_state.users))
-    col2.metric("Admin Accounts",   len(st.session_state.admins))
-    col3.metric("Current Role",     "Admin")
+    col2.metric("Admin Accounts", len(st.session_state.admins))
+    col3.metric("Current Role", "Admin")
     st.subheader("Registered Users")
     rows = [{"Name": v["name"], "Email ID": k} for k, v in st.session_state.users.items()]
     st.dataframe(pd.DataFrame(rows), use_container_width=True)
@@ -816,6 +689,7 @@ def generate_pdf_report(patient_data, result, confidence, patient_name, patient_
     pdf.drawString(40, height - 65, f"Generated: {prediction_time}")
 
     y = height - 110
+
     pdf.setFillColorRGB(0.94, 0.97, 1.0)
     pdf.rect(30, y - 55, width - 60, 62, fill=True, stroke=False)
     pdf.setFillColorRGB(0.05, 0.52, 0.78)
@@ -856,6 +730,7 @@ def generate_pdf_report(patient_data, result, confidence, patient_name, patient_
         y -= 22
 
     y -= 14
+
     pdf.setFillColorRGB(0.1, 0.1, 0.1)
     pdf.setFont("Helvetica-Bold", 13)
     pdf.drawString(40, y, "Prediction Result")
@@ -948,7 +823,7 @@ def show_patient_analytics(patient_data):
                 "threshold": {"line": {"color": "red", "width": 3}, "value": 126}
             }
         ))
-        g.update_layout(height=350, template=plot_template, margin=dict(t=40, b=20, l=20, r=20))
+        g.update_layout(height=300, template=plot_template, margin=dict(t=40, b=20))
         st.plotly_chart(g, use_container_width=True)
 
     with c2:
@@ -968,7 +843,7 @@ def show_patient_analytics(patient_data):
                 "threshold": {"line": {"color": "orange", "width": 3}, "value": 25}
             }
         ))
-        bg2.update_layout(height=350, template=plot_template, margin=dict(t=40, b=20, l=20, r=20))
+        bg2.update_layout(height=300, template=plot_template, margin=dict(t=40, b=20))
         st.plotly_chart(bg2, use_container_width=True)
 
 
@@ -988,16 +863,16 @@ def show_health_suggestions(patient_data):
         desc_col  = "#1E40AF"
 
     items_html = "".join([f"""
-    <li style="margin-bottom:10px;color:{desc_col};font-size:15px;font-weight:500;">{s}</li>
+    <li style="margin-bottom:10px; color:{desc_col}; font-size:15px; font-weight:500;">{s}</li>
     """ for s in suggestions])
 
     components.html(f"""
-    <div style="background:{card_bg};padding:30px 36px;border-radius:24px;
-                box-shadow:0 8px 28px rgba(0,0,0,0.12);font-family:Arial,sans-serif;">
-        <h2 style="color:{title_col};font-size:22px;font-weight:800;margin-bottom:16px;">
+    <div style="background:{card_bg}; padding:30px 36px; border-radius:24px;
+                box-shadow:0 8px 28px rgba(0,0,0,0.12); font-family:Arial,sans-serif;">
+        <h2 style="color:{title_col}; font-size:22px; font-weight:800; margin-bottom:16px;">
             💡 Personalized Health Recommendations
         </h2>
-        <ul style="margin:0;padding-left:22px;line-height:1.8;">{items_html}</ul>
+        <ul style="margin:0; padding-left:22px; line-height:1.8;">{items_html}</ul>
     </div>
     """, height=270)
 
@@ -1033,11 +908,13 @@ def prediction_page():
     st.write("Fill in your health values below:")
 
     col1, col2 = st.columns(2)
+
     with col1:
         preg    = st.number_input("Pregnancies", 0, 20, 1)
         glucose = st.number_input("Glucose (mg/dL)", 50, 250, 120)
         bp      = st.number_input("Blood Pressure (mm Hg)", 30, 140, 70)
         skin    = st.number_input("Skin Thickness (mm)", 0, 100, 20)
+
     with col2:
         insulin = st.number_input("Insulin (μU/mL)", 0, 400, 100)
         bmi     = st.number_input("BMI", 10.0, 70.0, 25.0)
@@ -1046,6 +923,7 @@ def prediction_page():
 
     st.write("")
     if st.button("🔍 Predict Diabetes Risk", use_container_width=True):
+
         if not patient_name_input.strip():
             st.error("Please enter the patient name first.")
             st.stop()
@@ -1095,6 +973,7 @@ def prediction_page():
             patient_data, result, confidence,
             final_name, final_email, pred_time
         )
+
         st.session_state.page = "Results"
         st.rerun()
 
@@ -1120,6 +999,7 @@ def results_page():
     email        = st.session_state.current_user_email
     pdf_bytes    = st.session_state.pdf_bytes
 
+    # Patient Info Card
     st.markdown(f"""
     <div class="patient-info-card">
         <div class="patient-info-row">
@@ -1143,6 +1023,7 @@ def results_page():
     </div>
     """, unsafe_allow_html=True)
 
+    # Result Banner
     if result == "High Risk of Diabetes":
         st.markdown(f"""
         <div class="result-high">
@@ -1159,6 +1040,8 @@ def results_page():
         """, unsafe_allow_html=True)
 
     st.write("")
+
+    # Parameter Summary Grid
     st.subheader("🧾 Submitted Health Parameters")
     params = list(patient_data.items())
     cols   = st.columns(4)
@@ -1177,6 +1060,7 @@ def results_page():
     show_health_suggestions(patient_data)
     st.write("")
 
+    # Action Buttons
     b1, b2 = st.columns(2)
     with b1:
         st.download_button(
@@ -1194,21 +1078,24 @@ def results_page():
             st.session_state.page = "Prediction"
             st.rerun()
 
+    # WhatsApp PDF Share
     st.write("")
     st.markdown("""
     <div style="background:linear-gradient(135deg,#dcfce7,#bbf7d0);
-                border:2px solid #4ade80;border-radius:20px;padding:22px 26px;">
+                border:2px solid #4ade80; border-radius:20px; padding:22px 26px;">
         <div style="font-size:20px;font-weight:800;color:#14532d;">
             📲 Share PDF Report via WhatsApp
         </div>
         <div style="font-size:13px;color:#166534;margin-top:4px;">
             Click the button below to share the PDF file directly.
-            Works best on mobile browsers. On desktop, download and attach manually.
+            Works best on mobile browsers. On desktop, please download
+            the PDF and attach it manually in WhatsApp.
         </div>
     </div>
     """, unsafe_allow_html=True)
 
     st.write("")
+
     pdf_file_name = f"glucotrack_{name.replace(' ', '_')}_report.pdf"
     share_caption = (
         f"GlucoTrack Diabetes Risk Report\n"
@@ -1228,9 +1115,15 @@ def results_page():
 # ==============================
 page = st.session_state.page
 
-if   page == "User Login":       user_login()
-elif page == "Sign Up":          signup()
-elif page == "Admin Login":      admin_login()
-elif page == "Admin Dashboard":  admin_dashboard()
-elif page == "Prediction":       prediction_page()
-elif page == "Results":          results_page()
+if page == "User Login":
+    user_login()
+elif page == "Sign Up":
+    signup()
+elif page == "Admin Login":
+    admin_login()
+elif page == "Admin Dashboard":
+    admin_dashboard()
+elif page == "Prediction":
+    prediction_page()
+elif page == "Results":
+    results_page()

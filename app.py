@@ -1,329 +1,508 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import pickle
+from PIL import Image
 import base64
-import os
-from datetime import datetime
-from io import BytesIO
-import plotly.graph_objects as go
+import io
+import matplotlib.pyplot as plt
+from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
-import streamlit.components.v1 as components
+from reportlab.lib.utils import ImageReader
+from urllib.parse import quote
+from datetime import datetime
+import tempfile
+import os
+import random
+import re
+import plotly.graph_objects as go
 
 # ==============================
 # PAGE CONFIG
 # ==============================
 st.set_page_config(
-    page_title="GlucoTrack",
+    page_title="GlucoTrack — Diabetes Prediction System",
     page_icon="🩺",
     layout="wide"
 )
 
 # ==============================
-# LOAD MODEL
-# ==============================
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-try:
-    model   = pickle.load(open(os.path.join(BASE_DIR, "diabetes_model.pkl"), "rb"))
-    columns = pickle.load(open(os.path.join(BASE_DIR, "columns.pkl"), "rb"))
-except FileNotFoundError as e:
-    st.error(
-        f"Model file not found: {e}\n\n"
-        "Please make sure **diabetes_model.pkl** and **columns.pkl** are present "
-        "in the same folder as app.py and are pushed to your repository."
-    )
-    st.stop()
-
-# ==============================
 # SESSION STATE
 # ==============================
-defaults = {
-    "started": False,
+default_values = {
     "logged_in": False,
-    "role": None,
-    "page": "User Login",
-    "users": {"user@gmail.com": {"password": "1234", "name": "Demo User"}},
-    "admins": {"admin@glucotrack.com": "admin@123"},
+    "theme": "Light",
+    "patient_photo": None,
+    "current_user": None,
+    "selected_menu": "🏠 Welcome",
+    "otp_sent": False,
+    "login_otp": None,
+    "login_identifier": "",
+    "login_username": None,
+    "active_patient_name": "",
+    "active_patient_id": "",
+    "active_patient_age": None,
+    "active_patient_gender": "",
     "prediction_done": False,
-    "patient_data": None,
-    "prediction_result": None,
-    "confidence": None,
-    "pdf_bytes": None,
-    "current_user_name": "",
-    "current_user_email": "",
-    "prediction_time": None,
+    "input_raw": None,
+    "prediction": None,
+    "probability": None,
 }
 
-for key, value in defaults.items():
+for key, value in default_values.items():
     if key not in st.session_state:
         st.session_state[key] = value
 
-# ==============================
-# THEME
-# ==============================
-dark_mode = False
-if st.session_state.started:
-    dark_mode = st.sidebar.toggle("🌙 Dark Mode")
-
-if dark_mode:
-    bg = "#023047"
-    card = "#126782"
-    text = "#FFFFFF"
-    accent = "#8ECAE6"
-    input_text = "#FFFFFF"
-    sidebar_bg = "linear-gradient(180deg, #012A3A, #023047, #126782)"
-    plot_template = "plotly_dark"
-    feature_bg1 = "linear-gradient(135deg, #0C3547, #0A4A6E)"
-    feature_bg2 = "linear-gradient(135deg, #0C3D1E, #0A4D28)"
-    feature_bg3 = "linear-gradient(135deg, #3D2E00, #4D3A00)"
-    feature_txt1 = "#8ECAE6"
-    feature_txt2 = "#86EFAC"
-    feature_txt3 = "#FDE68A"
-    step_bg = "rgba(255,255,255,0.07)"
-    step_border = "rgba(255,255,255,0.15)"
-    step_txt = "#FFFFFF"
-else:
-    bg = "#F0F8FF"
-    card = "#FFFFFF"
-    text = "#1E293B"
-    accent = "#0284C7"
-    input_text = "#1E293B"
-    sidebar_bg = "linear-gradient(180deg, #8ECAE6, #219EBC)"
-    plot_template = "plotly_white"
-    feature_bg1 = "linear-gradient(135deg, #E0F2FE, #BAE6FD)"
-    feature_bg2 = "linear-gradient(135deg, #DCFCE7, #BBF7D0)"
-    feature_bg3 = "linear-gradient(135deg, #FEF9C3, #FDE68A)"
-    feature_txt1 = "#075985"
-    feature_txt2 = "#166534"
-    feature_txt3 = "#854D0E"
-    step_bg = "rgba(2,132,199,0.07)"
-    step_border = "rgba(2,132,199,0.18)"
-    step_txt = "#1E293B"
+if "users_db" not in st.session_state:
+    st.session_state.users_db = {
+        "admin": {
+            "password": "1234",
+            "full_name": "Administrator",
+            "role": "Doctor",
+            "account_type": "Doctor",
+            "email": "admin@gmail.com",
+            "phone": "9999999999",
+            "specialization": "General Physician",
+            "license": "DEMO-ADMIN"
+        }
+    }
 
 # ==============================
-# CSS
+# LOAD MODEL & COLUMNS
 # ==============================
-st.markdown(f"""
-<style>
-.stApp {{
-    background: {bg};
-    color: {text};
-}}
-section[data-testid="stSidebar"] {{
-    background: {sidebar_bg} !important;
-}}
-section[data-testid="stSidebar"] > div {{ background: transparent; }}
-section[data-testid="stSidebar"] * {{ color: white !important; }}
+@st.cache_resource
+def load_model():
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    try:
+        model = pickle.load(open(os.path.join(BASE_DIR, "diabetes_model.pkl"), "rb"))
+        columns = pickle.load(open(os.path.join(BASE_DIR, "columns.pkl"), "rb"))
+        return model, columns
+    except FileNotFoundError as e:
+        st.error(
+            f"Model file not found: {e}\n\n"
+            "Please make sure **diabetes_model.pkl** and **columns.pkl** are present "
+            "in the same folder as app.py and are pushed to your repository."
+        )
+        st.stop()
 
-div[data-testid="stRadio"] label {{
-    background: rgba(255,255,255,0.14);
-    padding: 12px 16px;
-    border-radius: 14px;
-    margin-bottom: 8px;
-    font-weight: 600;
-    display: block;
-}}
-div[data-testid="stRadio"] label:hover {{ background: rgba(255,255,255,0.28); }}
-
-.stTextInput input, .stNumberInput input, .stTextArea textarea {{
-    background-color: {card} !important;
-    color: {input_text} !important;
-    border-radius: 12px !important;
-}}
-div[data-baseweb="input"] > div {{
-    background-color: {card} !important;
-    border-radius: 12px !important;
-    border: 1.5px solid rgba(2,132,199,0.25) !important;
-}}
-div[data-baseweb="select"] > div {{
-    background-color: {card} !important;
-    color: {input_text} !important;
-    border-radius: 12px !important;
-}}
-div[data-baseweb="select"] * {{ color: {input_text} !important; }}
-
-.hero-wrap {{
-    background: linear-gradient(135deg, #0EA5E9 0%, #8B5CF6 50%, #EC4899 100%);
-    padding: 60px 40px 50px;
-    border-radius: 32px;
-    text-align: center;
-    box-shadow: 0 20px 60px rgba(14,165,233,0.30);
-    position: relative;
-    overflow: hidden;
-}}
-.hero-badge {{
-    display: inline-block;
-    background: rgba(255,255,255,0.18);
-    color: white !important;
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-    padding: 6px 18px;
-    border-radius: 100px;
-    margin-bottom: 18px;
-    border: 1px solid rgba(255,255,255,0.30);
-}}
-.hero-title {{
-    font-size: 58px;
-    font-weight: 900;
-    color: white !important;
-    line-height: 1.1;
-    margin-bottom: 16px;
-}}
-.hero-sub {{
-    font-size: 19px;
-    color: rgba(255,255,255,0.90) !important;
-    max-width: 640px;
-    margin: 0 auto 10px;
-    line-height: 1.6;
-}}
-.hero-stats {{
-    display: flex;
-    justify-content: center;
-    gap: 40px;
-    margin-top: 36px;
-    flex-wrap: wrap;
-}}
-.hero-stat-num {{
-    font-size: 32px;
-    font-weight: 900;
-    color: white !important;
-}}
-.hero-stat-label {{
-    font-size: 13px;
-    color: rgba(255,255,255,0.80) !important;
-    font-weight: 500;
-}}
-.feat-card {{
-    border-radius: 24px;
-    padding: 32px 26px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.09);
-    height: 100%;
-}}
-.feat-icon {{ font-size: 48px; margin-bottom: 12px; display: block; }}
-.feat-title {{ font-size: 19px; font-weight: 800; margin-bottom: 12px; }}
-.feat-desc {{ font-size: 14.5px; line-height: 1.7; opacity: 0.92; }}
-.feat-tag {{
-    display: inline-block;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    padding: 4px 12px;
-    border-radius: 100px;
-    margin-bottom: 14px;
-    background: rgba(255,255,255,0.35);
-}}
-.section-heading {{ text-align: center; margin: 48px 0 8px; }}
-.section-heading h2 {{ font-size: 32px; font-weight: 900; color: {text} !important; }}
-.section-heading p {{ font-size: 16px; color: {text} !important; opacity: 0.65; margin-top: 4px; }}
-.step-card {{
-    background: {step_bg};
-    border: 1.5px solid {step_border};
-    border-radius: 20px;
-    padding: 26px 20px;
-    text-align: center;
-    height: 100%;
-}}
-.step-num {{ font-size: 36px; font-weight: 900; color: {accent} !important; margin-bottom: 8px; }}
-.step-title {{ font-size: 15px; font-weight: 700; color: {step_txt} !important; margin-bottom: 6px; }}
-.step-desc {{ font-size: 13px; color: {step_txt} !important; opacity: 0.75; line-height: 1.5; }}
-.result-high {{
-    background: linear-gradient(135deg, #FFE4E6, #FECDD3);
-    color: #BE123C !important;
-    padding: 32px;
-    border-radius: 24px;
-    font-size: 28px;
-    font-weight: 800;
-    text-align: center;
-    border: 2px solid #FDA4AF;
-    box-shadow: 0 8px 24px rgba(190,18,60,0.12);
-}}
-.result-low {{
-    background: linear-gradient(135deg, #DCFCE7, #BBF7D0);
-    color: #166534 !important;
-    padding: 32px;
-    border-radius: 24px;
-    font-size: 28px;
-    font-weight: 800;
-    text-align: center;
-    border: 2px solid #86EFAC;
-    box-shadow: 0 8px 24px rgba(22,101,52,0.12);
-}}
-.patient-info-card {{
-    background: {card};
-    border-radius: 20px;
-    padding: 24px 30px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-    margin-bottom: 24px;
-    border-left: 5px solid {accent};
-}}
-.patient-info-row {{
-    display: flex;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 20px;
-}}
-.patient-info-item label {{
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.8px;
-    text-transform: uppercase;
-    color: {accent} !important;
-    display: block;
-    margin-bottom: 3px;
-}}
-.patient-info-item span {{
-    font-size: 16px;
-    font-weight: 600;
-    color: {text} !important;
-}}
-.param-card {{
-    background: {card};
-    border-radius: 16px;
-    padding: 16px 12px;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.07);
-    text-align: center;
-    margin-bottom: 12px;
-}}
-.param-label {{
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    color: {accent} !important;
-    margin-bottom: 4px;
-}}
-.param-value {{
-    font-size: 22px;
-    font-weight: 900;
-    color: {text} !important;
-}}
-.stButton>button, .stDownloadButton>button {{
-    background: linear-gradient(135deg, #0284C7, #0EA5E9) !important;
-    color: white !important;
-    border-radius: 12px;
-    padding: 10px 26px;
-    border: none;
-    font-weight: 700;
-    box-shadow: 0 4px 14px rgba(2,132,199,0.30);
-}}
-.stButton>button:hover, .stDownloadButton>button:hover {{
-    background: linear-gradient(135deg, #0369A1, #0284C7) !important;
-    color: white !important;
-}}
-.stMarkdown, label, p, h1, h2, h3, h4, h5, h6, span {{
-    color: {input_text} !important;
-}}
-</style>
-""", unsafe_allow_html=True)
-
+model, columns = load_model()
 
 # ==============================
-# WHATSAPP PDF FILE SHARE BUTTON
+# THEME CSS (Second file colors)
 # ==============================
+def apply_theme(theme):
+    dark_mode = theme == "Dark"
+    
+    if dark_mode:
+        bg = "#023047"
+        card = "#126782"
+        text = "#FFFFFF"
+        accent = "#8ECAE6"
+        input_text = "#FFFFFF"
+        sidebar_bg = "linear-gradient(180deg, #012A3A, #023047, #126782)"
+        plot_template = "plotly_dark"
+        text_sub = "#A0C4D4"
+        border = "#1E5F74"
+        input_bg = "#126782"
+        hover_bg = "#1A7A8A"
+    else:
+        bg = "#F0F8FF"
+        card = "#FFFFFF"
+        text = "#1E293B"
+        accent = "#0284C7"
+        input_text = "#1E293B"
+        sidebar_bg = "linear-gradient(180deg, #8ECAE6, #219EBC)"
+        plot_template = "plotly_white"
+        text_sub = "#51615A"
+        border = "#D6E4DD"
+        input_bg = "#FFFFFF"
+        hover_bg = "#DDF3EC"
+
+    st.markdown(f"""
+    <style>
+    @import url('[fonts.googleapis.com](https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600;700&display=swap)');
+
+    html, body, .stApp {{
+        background-color: {bg} !important;
+        color: {text} !important;
+        font-family: 'DM Sans', sans-serif;
+    }}
+
+    section[data-testid="stSidebar"] {{
+        background: {sidebar_bg} !important;
+    }}
+    
+    section[data-testid="stSidebar"] > div {{
+        background: transparent;
+    }}
+
+    section[data-testid="stSidebar"] * {{
+        color: white !important;
+    }}
+
+    h1, h2, h3, h4, h5, h6 {{
+        color: {text} !important;
+        font-family: 'DM Serif Display', serif;
+    }}
+
+    p, span, div, label {{
+        color: {text} !important;
+    }}
+
+    .stMarkdown p {{
+        color: {text_sub} !important;
+        font-size: 0.95rem;
+        line-height: 1.7;
+    }}
+
+    input, textarea {{
+        background-color: {input_bg} !important;
+        color: {input_text} !important;
+        border: 1px solid {border} !important;
+        border-radius: 12px !important;
+    }}
+
+    input::placeholder, textarea::placeholder {{
+        color: {text_sub} !important;
+        opacity: 0.7 !important;
+    }}
+
+    .stTextInput label,
+    .stNumberInput label,
+    .stTextArea label,
+    .stSelectbox label,
+    .stRadio label,
+    .stFileUploader label {{
+        color: {text_sub} !important;
+        font-size: 0.84rem;
+        font-weight: 600;
+    }}
+
+    div[data-baseweb="select"],
+    div[data-baseweb="select"] > div,
+    div[data-baseweb="select"] div {{
+        background-color: {input_bg} !important;
+        color: {input_text} !important;
+        border-color: {border} !important;
+        border-radius: 12px !important;
+    }}
+
+    div[data-baseweb="select"] svg {{
+        fill: {input_text} !important;
+    }}
+
+    div[data-baseweb="popover"],
+    div[data-baseweb="popover"] > div,
+    div[data-baseweb="menu"],
+    ul[role="listbox"],
+    div[role="listbox"] {{
+        background-color: {input_bg} !important;
+        color: {input_text} !important;
+        border: 1px solid {border} !important;
+        border-radius: 12px !important;
+    }}
+
+    li[role="option"],
+    div[role="option"] {{
+        background-color: {input_bg} !important;
+        color: {input_text} !important;
+    }}
+
+    li[role="option"]:hover,
+    div[role="option"]:hover,
+    li[role="option"][aria-selected="true"],
+    div[role="option"][aria-selected="true"] {{
+        background-color: {hover_bg} !important;
+    }}
+
+    div[data-testid="stRadio"] label {{
+        background: rgba(255,255,255,0.14);
+        padding: 12px 16px;
+        border-radius: 14px;
+        margin-bottom: 8px;
+        font-weight: 600;
+        display: block;
+    }}
+    
+    div[data-testid="stRadio"] label:hover {{
+        background: rgba(255,255,255,0.28);
+    }}
+
+    .stFileUploader,
+    .stFileUploader section,
+    .stFileUploader section > div,
+    div[data-testid="stFileUploader"],
+    div[data-testid="stFileUploader"] section,
+    div[data-testid="stFileUploader"] section div {{
+        background-color: {input_bg} !important;
+        color: {input_text} !important;
+        border-color: {border} !important;
+    }}
+
+    .stFileUploader button,
+    div[data-testid="stFileUploader"] button {{
+        background: linear-gradient(135deg, {accent}, #0EA5E9) !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 8px !important;
+        cursor: pointer !important;
+    }}
+
+    .stButton > button {{
+        cursor: pointer !important;
+        background: linear-gradient(135deg, #0284C7, #0EA5E9) !important;
+        color: #FFFFFF !important;
+        border: none !important;
+        border-radius: 12px !important;
+        padding: 10px 26px !important;
+        font-family: 'DM Sans', sans-serif !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.03em;
+        transition: all 0.2s ease !important;
+        box-shadow: 0 4px 14px rgba(2,132,199,0.30) !important;
+    }}
+
+    .stButton > button:hover {{
+        background: linear-gradient(135deg, #0369A1, #0284C7) !important;
+        transform: translateY(-1px) !important;
+        box-shadow: 0 8px 24px rgba(2,132,199,0.42) !important;
+    }}
+
+    .card {{
+        background: {card};
+        border: 1px solid {border};
+        border-radius: 16px;
+        padding: 1.8rem 2rem;
+        margin-bottom: 1.2rem;
+        box-shadow: 0 8px 24px rgba(17,24,39,0.08);
+    }}
+
+    .badge {{
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+    }}
+
+    .badge-green {{ background: rgba(34,197,94,0.14); color: #22C55E !important; }}
+    .badge-red {{ background: rgba(239,68,68,0.14); color: #EF4444 !important; }}
+
+    hr {{
+        border-color: {border} !important;
+    }}
+
+    .stSuccess, .stError, .stWarning, .stInfo {{
+        border-radius: 12px !important;
+    }}
+
+    .hero-wrap {{
+        background: linear-gradient(135deg, #0EA5E9 0%, #8B5CF6 50%, #EC4899 100%);
+        padding: 60px 40px 50px;
+        border-radius: 32px;
+        text-align: center;
+        box-shadow: 0 20px 60px rgba(14,165,233,0.30);
+        position: relative;
+        overflow: hidden;
+    }}
+    
+    .hero-badge {{
+        display: inline-block;
+        background: rgba(255,255,255,0.18);
+        color: white !important;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        padding: 6px 18px;
+        border-radius: 100px;
+        margin-bottom: 18px;
+        border: 1px solid rgba(255,255,255,0.30);
+    }}
+    
+    .hero-title {{
+        font-size: 58px;
+        font-weight: 900;
+        color: white !important;
+        line-height: 1.1;
+        margin-bottom: 16px;
+    }}
+    
+    .hero-sub {{
+        font-size: 19px;
+        color: rgba(255,255,255,0.90) !important;
+        max-width: 640px;
+        margin: 0 auto 10px;
+        line-height: 1.6;
+    }}
+    
+    .hero-stats {{
+        display: flex;
+        justify-content: center;
+        gap: 40px;
+        margin-top: 36px;
+        flex-wrap: wrap;
+    }}
+    
+    .hero-stat-num {{
+        font-size: 32px;
+        font-weight: 900;
+        color: white !important;
+    }}
+    
+    .hero-stat-label {{
+        font-size: 13px;
+        color: rgba(255,255,255,0.80) !important;
+        font-weight: 500;
+    }}
+
+    .feat-card {{
+        border-radius: 24px;
+        padding: 32px 26px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.09);
+        height: 100%;
+    }}
+    
+    .feat-icon {{ font-size: 48px; margin-bottom: 12px; display: block; }}
+    .feat-title {{ font-size: 19px; font-weight: 800; margin-bottom: 12px; }}
+    .feat-desc {{ font-size: 14.5px; line-height: 1.7; opacity: 0.92; }}
+    
+    .feat-tag {{
+        display: inline-block;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        padding: 4px 12px;
+        border-radius: 100px;
+        margin-bottom: 14px;
+        background: rgba(255,255,255,0.35);
+    }}
+
+    .section-heading {{ text-align: center; margin: 48px 0 8px; }}
+    .section-heading h2 {{ font-size: 32px; font-weight: 900; color: {text} !important; }}
+    .section-heading p {{ font-size: 16px; color: {text} !important; opacity: 0.65; margin-top: 4px; }}
+
+    .step-card {{
+        background: {"rgba(255,255,255,0.07)" if dark_mode else "rgba(2,132,199,0.07)"};
+        border: 1.5px solid {"rgba(255,255,255,0.15)" if dark_mode else "rgba(2,132,199,0.18)"};
+        border-radius: 20px;
+        padding: 26px 20px;
+        text-align: center;
+        height: 100%;
+    }}
+    
+    .step-num {{ font-size: 36px; font-weight: 900; color: {accent} !important; margin-bottom: 8px; }}
+    .step-title {{ font-size: 15px; font-weight: 700; color: {text} !important; margin-bottom: 6px; }}
+    .step-desc {{ font-size: 13px; color: {text} !important; opacity: 0.75; line-height: 1.5; }}
+
+    .result-high {{
+        background: linear-gradient(135deg, #FFE4E6, #FECDD3);
+        color: #BE123C !important;
+        padding: 32px;
+        border-radius: 24px;
+        font-size: 28px;
+        font-weight: 800;
+        text-align: center;
+        border: 2px solid #FDA4AF;
+        box-shadow: 0 8px 24px rgba(190,18,60,0.12);
+    }}
+    
+    .result-low {{
+        background: linear-gradient(135deg, #DCFCE7, #BBF7D0);
+        color: #166534 !important;
+        padding: 32px;
+        border-radius: 24px;
+        font-size: 28px;
+        font-weight: 800;
+        text-align: center;
+        border: 2px solid #86EFAC;
+        box-shadow: 0 8px 24px rgba(22,101,52,0.12);
+    }}
+
+    .patient-info-card {{
+        background: {card};
+        border-radius: 20px;
+        padding: 24px 30px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        margin-bottom: 24px;
+        border-left: 5px solid {accent};
+    }}
+
+    .param-card {{
+        background: {card};
+        border-radius: 16px;
+        padding: 16px 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+        text-align: center;
+        margin-bottom: 12px;
+    }}
+    
+    .param-label {{
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        color: {accent} !important;
+        margin-bottom: 4px;
+    }}
+    
+    .param-value {{
+        font-size: 22px;
+        font-weight: 900;
+        color: {text} !important;
+    }}
+
+    .accent-line {{
+        display: inline-block;
+        height: 4px;
+        width: 66px;
+        background: linear-gradient(135deg, {accent}, #0EA5E9);
+        border-radius: 4px;
+        margin-bottom: 1rem;
+    }}
+
+    </style>
+    """, unsafe_allow_html=True)
+    
+    return dark_mode
+
+# ==============================
+# HELPER FUNCTIONS
+# ==============================
+def go_to_page(page_name):
+    st.session_state.selected_menu = page_name
+    st.rerun()
+
+def generate_otp():
+    return str(random.randint(100000, 999999))
+
+def clean_phone(value):
+    return re.sub(r"\D", "", value or "")
+
+def find_user_by_email_or_phone(identifier):
+    search_value = (identifier or "").strip().lower()
+    search_phone = clean_phone(search_value)
+
+    for username, user_data in st.session_state.users_db.items():
+        email = str(user_data.get("email", "")).strip().lower()
+        phone = clean_phone(str(user_data.get("phone", "")))
+
+        if search_value and search_value == email:
+            return username, user_data
+
+        if search_phone and search_phone == phone:
+            return username, user_data
+
+    return None, None
+
+def get_current_user_data():
+    if st.session_state.current_user:
+        return st.session_state.users_db.get(st.session_state.current_user, {})
+    return {}
+
 def build_whatsapp_file_share_button(pdf_bytes, file_name, caption):
     pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
     safe_caption = caption.replace("`", "'").replace("\\", "\\\\")
@@ -337,12 +516,11 @@ def build_whatsapp_file_share_button(pdf_bytes, file_name, caption):
         border-radius:12px;
         cursor:pointer;
         font-weight:700;
-        font-size:15px;
         box-shadow:0 8px 20px rgba(34,197,94,0.25);
         font-family:Arial, sans-serif;">
         📎 Share PDF File on WhatsApp
       </button>
-      <p id="shareStatus" style="font-family:Arial, sans-serif; font-size:13px; color:#475569; margin-top:8px;"></p>
+      <p id="shareStatus" style="font-family:Arial, sans-serif; font-size:13px; color:#475569;"></p>
     </div>
     <script>
     const btn = document.getElementById('sharePdfBtn');
@@ -363,24 +541,347 @@ def build_whatsapp_file_share_button(pdf_bytes, file_name, caption):
             text: `{safe_caption}`,
             files: [file]
           }});
-          status.innerText = 'Share panel opened. Select WhatsApp to send the PDF file.';
+          status.innerText = 'Share panel opened. Select WhatsApp to send the PDF.';
         }} else {{
-          status.innerText = 'Your browser does not support direct PDF file sharing. Please download the report and attach it manually in WhatsApp.';
+          status.innerText = 'Your browser cannot directly share PDF files. Please download the report and attach it in WhatsApp.';
         }}
       }} catch (err) {{
-        if (err.name !== 'AbortError') {{
-          status.innerText = 'PDF file sharing is not supported in this browser. Please download the report and attach it in WhatsApp.';
-        }}
+        status.innerText = 'PDF sharing is not supported here. Download the report and attach it in WhatsApp.';
       }}
     }};
     </script>
-    """, height=100)
+    """, height=95)
 
+def create_chart_image(title, labels, values):
+    fig, ax = plt.subplots(figsize=(5, 3))
+    ax.bar(labels, values)
+    ax.set_title(title)
+    ax.set_ylabel("Value")
+    plt.tight_layout()
+
+    img_buffer = io.BytesIO()
+    fig.savefig(img_buffer, format="png")
+    img_buffer.seek(0)
+    plt.close(fig)
+    return img_buffer
+
+def generate_patient_report(patient_name, patient_id, result_text, patient_data, patient_photo=None):
+    safe_name = "".join(ch if ch.isalnum() else "_" for ch in (patient_name or "patient"))
+    file_path = os.path.join(tempfile.gettempdir(), f"{safe_name}_diabetes_report.pdf")
+
+    c = canvas.Canvas(file_path, pagesize=A4)
+    width, height = A4
+
+    primary = colors.HexColor("#1E3A8A")
+    secondary = colors.HexColor("#2563EB")
+    accent = colors.HexColor("#7C3AED")
+    light_bg = colors.HexColor("#F8FAFC")
+    border = colors.HexColor("#D8DEE9")
+    text_dark = colors.HexColor("#111827")
+    text_muted = colors.HexColor("#6B7280")
+    success = colors.HexColor("#16A34A")
+    danger = colors.HexColor("#DC2626")
+    warning = colors.HexColor("#F59E0B")
+
+    def footer(page_no):
+        c.setStrokeColor(border)
+        c.line(45, 42, width - 45, 42)
+        c.setFillColor(text_muted)
+        c.setFont("Helvetica", 8)
+        c.drawString(50, 28, "Generated by GLUCOTRACK | Project/Demo Report")
+        c.drawRightString(width - 50, 28, f"Page {page_no}")
+
+    def header(title, subtitle=None):
+        c.setFillColor(primary)
+        c.rect(0, height - 95, width, 95, fill=True, stroke=False)
+        c.setFillColor(colors.white)
+        c.setFont("Helvetica-Bold", 22)
+        c.drawString(50, height - 45, title)
+        if subtitle:
+            c.setFont("Helvetica", 10)
+            c.drawString(50, height - 65, subtitle)
+        c.setFillColor(secondary)
+        c.roundRect(width - 165, height - 62, 115, 30, 10, fill=True, stroke=False)
+        c.setFillColor(colors.white)
+        c.setFont("Helvetica-Bold", 11)
+        c.drawCentredString(width - 107, height - 51, "GLUCOTRACK")
+
+    def section_title(y, title):
+        c.setFillColor(primary)
+        c.setFont("Helvetica-Bold", 13)
+        c.drawString(50, y, title)
+        c.setStrokeColor(secondary)
+        c.setLineWidth(2)
+        c.line(50, y - 6, 180, y - 6)
+        return y - 26
+
+    def info_card(x, y, w, h, label, value, color=primary):
+        c.setFillColor(light_bg)
+        c.setStrokeColor(border)
+        c.roundRect(x, y, w, h, 12, fill=True, stroke=True)
+        c.setFillColor(text_muted)
+        c.setFont("Helvetica-Bold", 8)
+        c.drawString(x + 14, y + h - 18, label.upper())
+        c.setFillColor(color)
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(x + 14, y + 16, str(value))
+
+    generated_on = datetime.now().strftime('%d-%m-%Y %I:%M %p')
+    glucose_value = float(patient_data["Glucose"].values[0])
+    bmi_value = float(patient_data["BMI"].values[0])
+    result_color = danger if "High" in result_text else success
+    risk_label = "HIGH RISK" if "High" in result_text else "LOW RISK"
+
+    header("Diabetes Prediction Report", f"Generated on {generated_on}")
+
+    c.setFillColor(colors.white)
+    c.setStrokeColor(border)
+    c.roundRect(45, height - 210, width - 90, 85, 14, fill=True, stroke=True)
+
+    c.setFillColor(text_dark)
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(65, height - 150, "Patient Summary")
+    c.setFont("Helvetica", 10)
+    c.setFillColor(text_muted)
+    c.drawString(65, height - 170, f"Patient Name: {patient_name}")
+    c.drawString(65, height - 188, f"Patient ID: {patient_id}")
+
+    c.setFillColor(result_color)
+    c.roundRect(width - 205, height - 185, 130, 34, 10, fill=True, stroke=False)
+    c.setFillColor(colors.white)
+    c.setFont("Helvetica-Bold", 12)
+    c.drawCentredString(width - 140, height - 173, risk_label)
+
+    if patient_photo:
+        try:
+            photo_bytes = base64.b64decode(patient_photo)
+            photo_img = ImageReader(io.BytesIO(photo_bytes))
+            c.drawImage(photo_img, width - 85, height - 205, 45, 45, mask='auto')
+        except Exception:
+            pass
+
+    y = section_title(height - 245, "Key Health Indicators")
+    info_card(50, y - 55, 115, 52, "Glucose", patient_data["Glucose"].values[0], danger if glucose_value >= 126 else primary)
+    info_card(180, y - 55, 115, 52, "BMI", patient_data["BMI"].values[0], warning if bmi_value >= 25 else primary)
+    info_card(310, y - 55, 115, 52, "Blood Pressure", patient_data["BloodPressure"].values[0], primary)
+    info_card(440, y - 55, 105, 52, "Insulin", patient_data["Insulin"].values[0], primary)
+
+    y = section_title(height - 360, "Clinical Input Values")
+    table_x = 55
+    table_y = y
+    row_h = 24
+    col_w1 = 245
+    col_w2 = 210
+
+    c.setFillColor(primary)
+    c.roundRect(table_x, table_y - row_h, col_w1 + col_w2, row_h, 8, fill=True, stroke=False)
+    c.setFillColor(colors.white)
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(table_x + 12, table_y - 16, "Input Field")
+    c.drawString(table_x + col_w1 + 12, table_y - 16, "Patient Value")
+
+    y_cursor = table_y - row_h
+    c.setFont("Helvetica", 10)
+    for i, col in enumerate(patient_data.columns):
+        y_cursor -= row_h
+        c.setFillColor(colors.HexColor("#FFFFFF") if i % 2 == 0 else colors.HexColor("#F3F6FB"))
+        c.rect(table_x, y_cursor, col_w1 + col_w2, row_h, fill=True, stroke=False)
+        c.setStrokeColor(border)
+        c.rect(table_x, y_cursor, col_w1 + col_w2, row_h, fill=False, stroke=True)
+        c.setFillColor(text_dark)
+        c.drawString(table_x + 12, y_cursor + 8, str(col))
+        c.drawString(table_x + col_w1 + 12, y_cursor + 8, str(patient_data[col].values[0]))
+
+    c.setFillColor(text_muted)
+    c.setFont("Helvetica-Oblique", 8)
+    c.drawString(50, 72, "Note: This prediction is generated by a machine learning model and should be verified by a qualified medical professional.")
+    footer(1)
+    c.showPage()
+
+    header("Patient Data Visualization", "Visual summary of important clinical values")
+
+    chart1 = create_chart_image(
+        "Metabolic Indicators",
+        ["Glucose", "BMI", "Age"],
+        [patient_data["Glucose"].values[0], patient_data["BMI"].values[0], patient_data["Age"].values[0]]
+    )
+    chart2 = create_chart_image(
+        "Blood Pressure, Insulin and Skin",
+        ["BP", "Insulin", "Skin"],
+        [patient_data["BloodPressure"].values[0], patient_data["Insulin"].values[0], patient_data["SkinThickness"].values[0]]
+    )
+
+    c.setFillColor(light_bg)
+    c.setStrokeColor(border)
+    c.roundRect(45, height - 360, width - 90, 240, 14, fill=True, stroke=True)
+    c.drawImage(ImageReader(chart1), 70, height - 335, 455, 190)
+
+    c.setFillColor(light_bg)
+    c.setStrokeColor(border)
+    c.roundRect(45, height - 625, width - 90, 240, 14, fill=True, stroke=True)
+    c.drawImage(ImageReader(chart2), 70, height - 600, 455, 190)
+
+    footer(2)
+    c.showPage()
+
+    header("Health Advice", "General guidance based on entered values")
+
+    if "High" in result_text:
+        advice_title = "Recommended Action: Medical Consultation Needed"
+        advice_color = danger
+        advice_lines = [
+            "Consult a doctor or diabetes specialist as soon as possible.",
+            "Avoid excess sugar, sweet drinks, fried food and junk food.",
+            "Walk for at least 30 minutes daily, if medically suitable.",
+            "Follow a balanced diet with vegetables, protein and fiber-rich food.",
+            "Monitor fasting and post-meal glucose regularly."
+        ]
+    elif 100 <= glucose_value < 126:
+        advice_title = "Recommended Action: Lifestyle Improvement"
+        advice_color = warning
+        advice_lines = [
+            "The glucose value may be in the prediabetes range.",
+            "Reduce refined carbohydrates and sugary food items.",
+            "Maintain a healthy body weight.",
+            "Do regular physical exercise.",
+            "Repeat glucose testing after medical consultation."
+        ]
+    else:
+        advice_title = "Recommended Action: Maintain Healthy Routine"
+        advice_color = success
+        advice_lines = [
+            "Current risk appears low.",
+            "Continue a healthy lifestyle and balanced diet.",
+            "Maintain BMI in the normal range.",
+            "Avoid excess sugar and processed food.",
+            "Go for routine health checkups."
+        ]
+
+    c.setFillColor(advice_color)
+    c.roundRect(50, height - 165, width - 100, 48, 12, fill=True, stroke=False)
+    c.setFillColor(colors.white)
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(70, height - 145, advice_title)
+
+    y = height - 220
+    c.setFont("Helvetica", 11)
+    for i, line in enumerate(advice_lines, 1):
+        c.setFillColor(light_bg)
+        c.setStrokeColor(border)
+        c.roundRect(60, y - 10, width - 120, 32, 8, fill=True, stroke=True)
+        c.setFillColor(primary)
+        c.setFont("Helvetica-Bold", 11)
+        c.drawString(78, y, f"{i}.")
+        c.setFillColor(text_dark)
+        c.setFont("Helvetica", 11)
+        c.drawString(105, y, line)
+        y -= 42
+
+    c.setFillColor(text_muted)
+    c.setFont("Helvetica-Oblique", 9)
+    c.drawString(50, 75, "Disclaimer: This report is for project/demo purpose only and is not a replacement for medical diagnosis.")
+    footer(3)
+
+    c.save()
+    return file_path
+
+def get_suggestions(patient_data):
+    glucose = patient_data["Glucose"]
+    bmi = patient_data["BMI"]
+    bp = patient_data["BloodPressure"]
+    if glucose >= 126:
+        return [
+            "Monitor blood glucose levels every day.",
+            "Reduce sugar, sweets, and refined carbohydrates.",
+            "Consult a doctor for diabetes management.",
+            "Avoid sugary drinks — switch to water or herbal tea."
+        ]
+    elif bmi >= 30:
+        return [
+            "Follow a calorie-controlled and balanced diet.",
+            "Exercise for at least 30 minutes daily.",
+            "Track your weight and BMI weekly.",
+            "Avoid fried and processed foods."
+        ]
+    elif bp > 90:
+        return [
+            "Reduce sodium (salt) and processed food intake.",
+            "Monitor blood pressure at home regularly.",
+            "Practice yoga or meditation for stress relief.",
+            "Maintain daily physical activity for heart health."
+        ]
+    else:
+        return [
+            "Maintain a balanced diet rich in vegetables and whole grains.",
+            "Exercise regularly to stay active and healthy.",
+            "Drink at least 8 glasses of water daily.",
+            "Get 7-8 hours of quality sleep every night."
+        ]
 
 # ==============================
-# HOME PAGE
+# SIDEBAR
 # ==============================
-def home_page():
+st.sidebar.markdown("""
+<div style='padding: 0.6rem 0 1rem 0;'>
+  <span style='font-size:1.5rem; font-weight:800;'>🩺 GLUCOTRACK</span><br>
+  <span style='font-size:0.75rem; opacity:0.55; letter-spacing:0.08em;'>
+      SMART HEALTH DASHBOARD
+  </span>
+</div>
+""", unsafe_allow_html=True)
+
+if st.session_state.get("logged_in", False):
+    menu_options = [
+        "🏠 Welcome",
+        "📋 Enroll Patient",
+        "🔬 Prediction",
+        "📊 Visualization",
+        "ℹ️ About"
+    ]
+else:
+    menu_options = [
+        "🏠 Welcome",
+        "🔐 Login",
+        "📝 Sign Up",
+        "ℹ️ About"
+    ]
+
+if st.session_state.selected_menu not in menu_options:
+    st.session_state.selected_menu = "🏠 Welcome"
+
+default_index = menu_options.index(st.session_state.selected_menu)
+
+menu = st.sidebar.radio("Navigation", menu_options, index=default_index)
+st.session_state.selected_menu = menu
+
+st.sidebar.divider()
+
+dark_mode = st.sidebar.checkbox("🌙 Dark Mode", value=(st.session_state.theme == "Dark"))
+st.session_state.theme = "Dark" if dark_mode else "Light"
+is_dark = apply_theme(st.session_state.theme)
+
+# Feature colors based on theme
+if is_dark:
+    feature_bg1 = "linear-gradient(135deg, #0C3547, #0A4A6E)"
+    feature_bg2 = "linear-gradient(135deg, #0C3D1E, #0A4D28)"
+    feature_bg3 = "linear-gradient(135deg, #3D2E00, #4D3A00)"
+    feature_txt1 = "#8ECAE6"
+    feature_txt2 = "#86EFAC"
+    feature_txt3 = "#FDE68A"
+    plot_template = "plotly_dark"
+else:
+    feature_bg1 = "linear-gradient(135deg, #E0F2FE, #BAE6FD)"
+    feature_bg2 = "linear-gradient(135deg, #DCFCE7, #BBF7D0)"
+    feature_bg3 = "linear-gradient(135deg, #FEF9C3, #FDE68A)"
+    feature_txt1 = "#075985"
+    feature_txt2 = "#166534"
+    feature_txt3 = "#854D0E"
+    plot_template = "plotly_white"
+
+# ==============================
+# WELCOME PAGE (Second file's home page)
+# ==============================
+if menu == "🏠 Welcome":
     st.markdown("""
     <div class="hero-wrap">
         <div class="hero-badge">🩺 AI-Powered Health Platform</div>
@@ -501,7 +1002,7 @@ def home_page():
     _, mid, _ = st.columns([1.5, 1, 1.5])
     with mid:
         if st.button("🚀 Get Started Now", use_container_width=True):
-            st.session_state.started = True
+            st.session_state.selected_menu = "🔐 Login"
             st.rerun()
 
     st.write("")
@@ -509,621 +1010,715 @@ def home_page():
     ⚕️ GlucoTrack is for educational purposes. Always consult a medical professional.
     </p>""", unsafe_allow_html=True)
 
+# ==============================
+# LOGIN PAGE WITH OTP
+# ==============================
+elif menu == "🔐 Login":
+    st.markdown('<div class="accent-line"></div>', unsafe_allow_html=True)
+    st.markdown("## Login")
+    st.markdown("You can login using either your password or OTP.")
 
-if not st.session_state.started:
-    home_page()
-    st.stop()
+    tab_password, tab_otp = st.tabs(["Password Login", "OTP Login"])
 
+    with tab_password:
+        col_l, col_r = st.columns([1, 1])
+        with col_l:
+            login_user = st.text_input("Username", placeholder="Example: admin", key="password_login_user")
+            login_password = st.text_input("Password", type="password", placeholder="Enter password", key="password_login_pass")
+
+            if st.button("Login with Password →", use_container_width=True):
+                db = st.session_state.users_db
+                if login_user in db and str(db[login_user].get("password", "")) == login_password:
+                    user_data = db[login_user]
+                    st.session_state.logged_in = True
+                    st.session_state.current_user = login_user
+                    st.session_state.otp_sent = False
+                    st.session_state.login_otp = None
+
+                    if user_data.get("role") == "Doctor":
+                        st.session_state.selected_menu = "📋 Enroll Patient"
+                    else:
+                        st.session_state.active_patient_name = user_data.get("full_name", "")
+                        st.session_state.active_patient_id = user_data.get("patient_id", "")
+                        st.session_state.active_patient_age = user_data.get("age")
+                        st.session_state.active_patient_gender = user_data.get("gender", "")
+                        st.session_state.selected_menu = "🔬 Prediction"
+
+                    st.success(f"Welcome, {user_data.get('full_name', 'User')}!")
+                    st.rerun()
+                else:
+                    st.error("Invalid username or password.")
+        with col_r:
+            st.markdown("""
+            <div class="card">
+              <h4>Password Login</h4>
+              <p>Use your registered username and password to access the app.</p>
+              <p><b>Demo username:</b> admin<br><b>Demo password:</b> 1234</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+    with tab_otp:
+        col_l, col_r = st.columns([1, 1])
+        with col_l:
+            login_identifier = st.text_input(
+                "Email ID or Phone Number",
+                value=st.session_state.login_identifier,
+                placeholder="Example: admin@gmail.com or 9999999999",
+                key="login_identifier_input"
+            )
+
+            if st.button("Send / Generate OTP", use_container_width=True):
+                username_found, user_data = find_user_by_email_or_phone(login_identifier)
+
+                if user_data:
+                    st.session_state.login_identifier = login_identifier.strip()
+                    st.session_state.login_username = username_found
+                    st.session_state.login_otp = generate_otp()
+                    st.session_state.otp_sent = True
+                    st.rerun()
+                else:
+                    st.session_state.otp_sent = False
+                    st.session_state.login_otp = None
+                    st.session_state.login_username = None
+                    st.error("No account found with this email ID or phone number. Please sign up first.")
+
+            if st.session_state.otp_sent and st.session_state.login_otp:
+                contact_type = "email ID" if "@" in st.session_state.login_identifier else "phone number"
+                st.success(f"OTP generated for your registered {contact_type}.")
+                st.info(f"Demo OTP for testing: {st.session_state.login_otp}")
+                st.caption("For a real app, connect an email/SMS service. For this project demo, the OTP is shown here.")
+
+                otp_input = st.text_input("Enter OTP", placeholder="Enter 6-digit OTP", key="otp_input")
+
+                if st.button("Verify OTP and Login →", use_container_width=True):
+                    if otp_input.strip() == str(st.session_state.login_otp):
+                        db = st.session_state.users_db
+                        user_data = db[st.session_state.login_username]
+
+                        st.session_state.logged_in = True
+                        st.session_state.current_user = st.session_state.login_username
+                        st.session_state.otp_sent = False
+                        st.session_state.login_otp = None
+
+                        if user_data.get("role") == "Doctor":
+                            st.session_state.selected_menu = "📋 Enroll Patient"
+                        else:
+                            st.session_state.active_patient_name = user_data.get("full_name", "")
+                            st.session_state.active_patient_id = user_data.get("patient_id", "")
+                            st.session_state.active_patient_age = user_data.get("age")
+                            st.session_state.active_patient_gender = user_data.get("gender", "")
+                            st.session_state.selected_menu = "🔬 Prediction"
+
+                        st.success(f"Welcome, {user_data.get('full_name', 'User')}!")
+                        st.rerun()
+                    else:
+                        st.error("Invalid OTP. Please enter the same OTP shown above.")
+        with col_r:
+            st.markdown("""
+            <div class="card">
+              <h4>OTP Login</h4>
+              <p>You can login using your registered email ID or phone number.</p>
+              <p>For project demo testing, the OTP is shown on the screen.</p>
+              <p><b>Demo email:</b> admin@gmail.com<br><b>Demo phone:</b> 9999999999</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+    st.markdown("New user? Open **Sign Up** from the sidebar.")
 
 # ==============================
-# SIDEBAR
+# SIGN UP PAGE
 # ==============================
-st.sidebar.markdown("## 🩺 GLUCOTRACK")
-st.sidebar.caption("Smart Health Dashboard")
-st.sidebar.markdown("---")
+elif menu == "📝 Sign Up":
+    st.markdown('<div class="accent-line"></div>', unsafe_allow_html=True)
+    st.markdown("## Create Account")
+    st.markdown("Create a Doctor or Patient account. After sign up, the correct page will open automatically.")
+    st.markdown("<br>", unsafe_allow_html=True)
 
-if st.session_state.logged_in:
-    st.sidebar.success(f"👤 {st.session_state.current_user_name or st.session_state.role}")
+    col_l, col_r = st.columns([1, 1])
 
-if st.session_state.logged_in:
-    if st.session_state.role == "Admin":
-        menu_options = ["Admin Dashboard", "Prediction", "Results"]
-    else:
-        menu_options = ["Prediction", "Results"]
-else:
-    menu_options = ["User Login", "Sign Up", "Admin Login"]
+    with col_l:
+        account_type = st.radio("Account Type", ["Patient", "Doctor"], horizontal=True)
 
-current_page = st.session_state.page
-if current_page not in menu_options:
-    current_page = menu_options[0]
-    st.session_state.page = current_page
+        st.markdown("#### Personal Details")
+        su_fullname = st.text_input("Full Name", placeholder="Enter full name", key="su_name")
 
-current_index = menu_options.index(current_page)
-
-selected_page = st.sidebar.radio(
-    "",
-    menu_options,
-    index=current_index,
-    label_visibility="collapsed"
-)
-
-if selected_page != st.session_state.page:
-    st.session_state.page = selected_page
-    st.rerun()
-
-if st.session_state.logged_in:
-    if st.sidebar.button("🚪 Logout"):
-        for k in ["logged_in", "role", "prediction_done", "patient_data",
-                  "prediction_result", "confidence", "pdf_bytes",
-                  "current_user_name", "current_user_email", "prediction_time"]:
-            st.session_state[k] = defaults[k]
-        st.session_state.page = "User Login"
-        st.rerun()
-
-
-# ==============================
-# LOGIN / SIGNUP
-# ==============================
-def user_login():
-    st.title("🔐 User Login")
-    email    = st.text_input("Email ID")
-    password = st.text_input("Password", type="password")
-    if st.button("Login"):
-        users = st.session_state.users
-        if email in users and users[email]["password"] == password:
-            st.session_state.logged_in = True
-            st.session_state.role = "User"
-            st.session_state.current_user_name  = users[email]["name"]
-            st.session_state.current_user_email = email
-            st.session_state.page = "Prediction"
-            st.rerun()
+        if account_type == "Doctor":
+            su_specialization = st.text_input("Specialization", placeholder="Example: General Physician")
+            su_license = st.text_input("Medical License ID", placeholder="Optional")
+            su_age = None
+            su_gender = None
+            su_patient_id = None
         else:
-            st.error("Invalid email ID or password.")
+            su_patient_id = st.text_input("Patient ID", placeholder="Example: PT-20260001")
+            su_age = st.number_input("Age", 1, 120, 25, key="su_age")
+            su_gender = st.selectbox("Gender", ["Female", "Male", "Other"], key="su_gender")
+            su_specialization = None
+            su_license = None
 
+        st.markdown("#### Contact Details for OTP Login")
+        su_email = st.text_input("Email ID", placeholder="Example: rose@gmail.com", key="su_email")
+        su_phone = st.text_input("Phone Number", placeholder="Example: 9876543210", key="su_phone")
 
-def signup():
-    st.title("📝 Patient Sign Up")
-    with st.form("signup_form"):
-        col1, col2 = st.columns(2)
-        with col1:
-            full_name = st.text_input("Full Name")
-            email     = st.text_input("Email ID")
-            phone     = st.text_input("Phone Number")
-            age       = st.number_input("Age", 1, 100, 25)
-        with col2:
-            gender       = st.selectbox("Gender", ["Female", "Male", "Other"])
-            address      = st.text_area("Address")
-            new_pass     = st.text_input("Create Password", type="password")
-            confirm_pass = st.text_input("Confirm Password", type="password")
-        submit = st.form_submit_button("Create Account")
-        if submit:
-            if not full_name or not email or not phone or not new_pass:
-                st.error("Please fill all required fields.")
-            elif new_pass != confirm_pass:
+        st.markdown("#### Login Details")
+        su_username = st.text_input("Choose Username", placeholder="Example: rose123", key="su_user")
+        su_password = st.text_input("Create Password", type="password", placeholder="Minimum 4 characters", key="su_pass")
+        su_password2 = st.text_input("Confirm Password", type="password", placeholder="Re-enter password", key="su_pass2")
+
+        if st.button("Create Account", use_container_width=True):
+            db = st.session_state.users_db
+
+            if not su_fullname or not su_username or not su_email or not su_phone or not su_password or not su_password2:
+                st.warning("Please fill full name, email ID, phone number, username and password.")
+            elif "@" not in su_email or "." not in su_email:
+                st.error("Please enter a valid email ID.")
+            elif len(clean_phone(su_phone)) < 10:
+                st.error("Please enter a valid phone number.")
+            elif len(su_username) < 3:
+                st.error("Username must be at least 3 characters.")
+            elif " " in su_username:
+                st.error("Username cannot contain spaces.")
+            elif su_username in db:
+                st.error("Username already exists. Choose another username.")
+            elif len(su_password) < 4:
+                st.error("Password must be at least 4 characters.")
+            elif su_password != su_password2:
                 st.error("Passwords do not match.")
-            elif email in st.session_state.users:
-                st.error("Email ID already exists.")
+            elif any(str(user.get("email", "")).strip().lower() == su_email.strip().lower() for user in db.values()):
+                st.error("This email ID is already registered.")
+            elif any(clean_phone(str(user.get("phone", ""))) == clean_phone(su_phone) for user in db.values()):
+                st.error("This phone number is already registered.")
             else:
-                st.session_state.users[email] = {"password": new_pass, "name": full_name}
-                st.success(f"Account created for {full_name}! Please login.")
+                db[su_username] = {
+                    "password": su_password,
+                    "full_name": su_fullname,
+                    "role": account_type,
+                    "account_type": account_type,
+                    "email": su_email.strip(),
+                    "phone": clean_phone(su_phone),
+                    "specialization": su_specialization,
+                    "license": su_license,
+                    "age": su_age,
+                    "gender": su_gender,
+                    "patient_id": su_patient_id
+                }
 
+                st.session_state.users_db = db
+                st.session_state.logged_in = True
+                st.session_state.current_user = su_username
 
-def admin_login():
-    st.title("🛡️ Admin Login")
-    email    = st.text_input("Admin Email ID")
-    password = st.text_input("Admin Password", type="password")
-    if st.button("Admin Login"):
-        if email in st.session_state.admins and st.session_state.admins[email] == password:
-            st.session_state.logged_in = True
-            st.session_state.role = "Admin"
-            st.session_state.current_user_name  = "Admin"
-            st.session_state.current_user_email = email
-            st.session_state.page = "Admin Dashboard"
-            st.rerun()
+                if account_type == "Doctor":
+                    st.session_state.selected_menu = "📋 Enroll Patient"
+                else:
+                    st.session_state.active_patient_name = su_fullname
+                    st.session_state.active_patient_id = su_patient_id
+                    st.session_state.active_patient_age = su_age
+                    st.session_state.active_patient_gender = su_gender
+                    st.session_state.selected_menu = "🔬 Prediction"
+
+                st.success(f"{account_type} account created successfully.")
+                st.balloons()
+                st.rerun()
+
+    with col_r:
+        st.markdown("""
+        <div class="card">
+          <h4>Sign Up Rules</h4>
+          <ul>
+            <li>Both Doctor and Patient accounts can be created.</li>
+            <li>Email ID, phone number and username must be unique.</li>
+            <li>Password login and OTP login are both available.</li>
+            <li>After sign up, the user will move directly to the correct page.</li>
+            <li>Patients will move to the Prediction page.</li>
+            <li>Doctors will move to the Patient Enrollment page.</li>
+          </ul>
+        </div>
+        """, unsafe_allow_html=True)
+
+        with st.expander("Registered Users", expanded=False):
+            for uname, udata in st.session_state.users_db.items():
+                st.markdown(f"**{udata['full_name']}**  \n`{uname}` · {udata.get('role', 'User')}  \nEmail: `{udata.get('email', 'Not added')}`  \nPhone: `{udata.get('phone', 'Not added')}`")
+                st.divider()
+
+# ==============================
+# ENROLL PATIENT PAGE
+# ==============================
+elif menu == "📋 Enroll Patient":
+    if not st.session_state.logged_in:
+        st.warning("Please login first.")
+    else:
+        current = get_current_user_data()
+        if current.get("role") != "Doctor" and current.get("role") != "Admin":
+            st.warning("Only doctors or admins can access the Patient Enrollment page.")
         else:
-            st.error("Invalid admin email or password.")
+            st.markdown('<div class="accent-line"></div>', unsafe_allow_html=True)
+            st.markdown("## Patient Enrollment")
+            st.markdown("Create a patient record before running the diabetes prediction.")
+            st.markdown("<br>", unsafe_allow_html=True)
 
+            col1, col2 = st.columns([1, 1])
 
-def admin_dashboard():
-    st.title("🛡️ Admin Dashboard")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Registered Users", len(st.session_state.users))
-    col2.metric("Admin Accounts", len(st.session_state.admins))
-    col3.metric("Current Role", "Admin")
-    st.subheader("Registered Users")
-    rows = [{"Name": v["name"], "Email ID": k} for k, v in st.session_state.users.items()]
-    st.dataframe(pd.DataFrame(rows), use_container_width=True)
+            with col1:
+                st.markdown("#### Patient Details")
+                p_name = st.text_input("Patient Full Name", placeholder="Example: Ramesh Kumar")
+                p_id = st.text_input("Patient ID", placeholder="Example: PT-20260001")
+                p_age = st.number_input("Age", 1, 120, 35)
+                p_gender = st.selectbox("Gender", ["Male", "Female", "Other"])
+                p_contact = st.text_input("Contact Number", placeholder="+91 XXXXX XXXXX")
+                p_addr = st.text_area("Address", placeholder="City, State", height=70)
 
+            with col2:
+                st.markdown("#### Patient Photo")
+                photo = st.file_uploader("Upload Photo (JPG / PNG)", type=["jpg", "jpeg", "png"])
 
-# ==============================
-# HEALTH SUGGESTIONS
-# ==============================
-def get_suggestions(patient_data):
-    glucose = patient_data["Glucose"]
-    bmi     = patient_data["BMI"]
-    bp      = patient_data["BloodPressure"]
-    if glucose >= 126:
-        return [
-            "Monitor blood glucose levels every day.",
-            "Reduce sugar, sweets, and refined carbohydrates.",
-            "Consult a doctor for diabetes management.",
-            "Avoid sugary drinks — switch to water or herbal tea."
-        ]
-    elif bmi >= 30:
-        return [
-            "Follow a calorie-controlled and balanced diet.",
-            "Exercise for at least 30 minutes daily.",
-            "Track your weight and BMI weekly.",
-            "Avoid fried and processed foods."
-        ]
-    elif bp > 90:
-        return [
-            "Reduce sodium (salt) and processed food intake.",
-            "Monitor blood pressure at home regularly.",
-            "Practice yoga or meditation for stress relief.",
-            "Maintain daily physical activity for heart health."
-        ]
-    else:
-        return [
-            "Maintain a balanced diet rich in vegetables and whole grains.",
-            "Exercise regularly to stay active and healthy.",
-            "Drink at least 8 glasses of water daily.",
-            "Get 7-8 hours of quality sleep every night."
-        ]
+                if photo:
+                    img = Image.open(photo)
+                    w, h = img.size
+                    side = min(w, h)
+                    left = (w - side) // 2
+                    top = (h - side) // 2
+                    img_cropped = img.crop((left, top, left + side, top + side))
+                    img_resized = img_cropped.resize((240, 240))
 
+                    buf = io.BytesIO()
+                    img_resized.save(buf, format="PNG")
+                    b64 = base64.b64encode(buf.getvalue()).decode()
+                    st.session_state.patient_photo = b64
 
-# ==============================
-# PDF REPORT
-# ==============================
-def generate_pdf_report(patient_data, result, confidence, patient_name, patient_email, prediction_time):
-    buffer = BytesIO()
-    pdf    = canvas.Canvas(buffer, pagesize=A4)
-    width, height = A4
+                    st.markdown(f"""
+                    <div style='text-align:center; margin-top:0.5rem;'>
+                      <img src="data:image/png;base64,{b64}"
+                           style="border-radius:14px; width:200px; height:200px;
+                           object-fit:cover; border:3px solid #0284C7;
+                           box-shadow:0 4px 20px rgba(2,132,199,0.35);" />
+                      <div style='font-size:0.75rem; margin-top:0.5rem; opacity:0.6;'>Photo Preview</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.info("No photo uploaded.")
 
-    pdf.setFillColorRGB(0.05, 0.52, 0.78)
-    pdf.rect(0, height - 80, width, 80, fill=True, stroke=False)
-    pdf.setFillColorRGB(1, 1, 1)
-    pdf.setFont("Helvetica-Bold", 20)
-    pdf.drawString(40, height - 45, "GlucoTrack — Diabetes Risk Report")
-    pdf.setFont("Helvetica", 10)
-    pdf.drawString(40, height - 65, f"Generated: {prediction_time}")
+                p_notes = st.text_area("Medical Notes", height=80, placeholder="Optional notes")
 
-    y = height - 110
-
-    pdf.setFillColorRGB(0.94, 0.97, 1.0)
-    pdf.rect(30, y - 55, width - 60, 62, fill=True, stroke=False)
-    pdf.setFillColorRGB(0.05, 0.52, 0.78)
-    pdf.setFont("Helvetica-Bold", 11)
-    pdf.drawString(45, y - 12, f"Patient Name:  {patient_name}")
-    pdf.drawString(45, y - 32, f"Email:              {patient_email}")
-    pdf.drawString(300, y - 12, f"Date:  {prediction_time[:10]}")
-    pdf.drawString(300, y - 32, f"Time:  {prediction_time[11:]}")
-    y -= 78
-
-    pdf.setFillColorRGB(0.1, 0.1, 0.1)
-    pdf.setFont("Helvetica-Bold", 13)
-    pdf.drawString(40, y, "Health Parameters")
-    y -= 6
-    pdf.setStrokeColorRGB(0.05, 0.52, 0.78)
-    pdf.setLineWidth(1.5)
-    pdf.line(40, y, width - 40, y)
-    y -= 20
-
-    items  = list(patient_data.items())
-    col2_x = width // 2 + 20
-    for i in range(0, len(items), 2):
-        k1, v1 = items[i]
-        pdf.setFillColorRGB(0.05, 0.52, 0.78)
-        pdf.setFont("Helvetica-Bold", 10)
-        pdf.drawString(50, y, f"{k1}:")
-        pdf.setFillColorRGB(0.1, 0.1, 0.1)
-        pdf.setFont("Helvetica", 11)
-        pdf.drawString(185, y, str(v1))
-        if i + 1 < len(items):
-            k2, v2 = items[i + 1]
-            pdf.setFillColorRGB(0.05, 0.52, 0.78)
-            pdf.setFont("Helvetica-Bold", 10)
-            pdf.drawString(col2_x, y, f"{k2}:")
-            pdf.setFillColorRGB(0.1, 0.1, 0.1)
-            pdf.setFont("Helvetica", 11)
-            pdf.drawString(col2_x + 135, y, str(v2))
-        y -= 22
-
-    y -= 14
-
-    pdf.setFillColorRGB(0.1, 0.1, 0.1)
-    pdf.setFont("Helvetica-Bold", 13)
-    pdf.drawString(40, y, "Prediction Result")
-    y -= 6
-    pdf.line(40, y, width - 40, y)
-    y -= 22
-
-    if "High" in result:
-        pdf.setFillColorRGB(1.0, 0.9, 0.91)
-        pdf.rect(40, y - 16, width - 80, 34, fill=True, stroke=False)
-        pdf.setFillColorRGB(0.75, 0.07, 0.24)
-    else:
-        pdf.setFillColorRGB(0.86, 0.99, 0.90)
-        pdf.rect(40, y - 16, width - 80, 34, fill=True, stroke=False)
-        pdf.setFillColorRGB(0.09, 0.40, 0.20)
-
-    pdf.setFont("Helvetica-Bold", 12)
-    pdf.drawString(55, y, f"{result}     |     Confidence: {confidence}%")
-    y -= 52
-
-    pdf.setFillColorRGB(0.1, 0.1, 0.1)
-    pdf.setFont("Helvetica-Bold", 13)
-    pdf.drawString(40, y, "Personalized Health Recommendations")
-    y -= 6
-    pdf.setStrokeColorRGB(0.05, 0.52, 0.78)
-    pdf.line(40, y, width - 40, y)
-    y -= 20
-
-    for s in get_suggestions(patient_data):
-        pdf.setFillColorRGB(0.05, 0.52, 0.78)
-        pdf.drawString(50, y, "•")
-        pdf.setFillColorRGB(0.1, 0.1, 0.1)
-        pdf.setFont("Helvetica", 11)
-        pdf.drawString(65, y, s[:88])
-        y -= 20
-
-    y -= 20
-    pdf.setFillColorRGB(0.5, 0.5, 0.5)
-    pdf.setFont("Helvetica-Oblique", 9)
-    pdf.drawString(40, y, "This report is generated by GlucoTrack ML model and does not replace professional medical advice.")
-
-    pdf.setFillColorRGB(0.05, 0.52, 0.78)
-    pdf.rect(0, 0, width, 28, fill=True, stroke=False)
-    pdf.setFillColorRGB(1, 1, 1)
-    pdf.setFont("Helvetica", 9)
-    pdf.drawString(40, 9, "GlucoTrack — Smart Diabetes Risk Prediction System")
-    pdf.drawRightString(width - 40, 9, f"Patient: {patient_name}")
-
-    pdf.save()
-    return buffer.getvalue()
-
-
-# ==============================
-# ANALYTICS
-# ==============================
-def show_patient_analytics(patient_data):
-    st.subheader("📊 Patient Health Analytics")
-
-    metrics = ["Glucose", "BMI", "Insulin", "BloodPressure", "Age"]
-    values  = [patient_data[m] for m in metrics]
-
-    fig = go.Figure()
-    fig.add_trace(go.Bar(
-        x=metrics, y=values,
-        marker_color=["#FF6B9A", "#4D96FF", "#F4A261", "#52B788", "#9D79BC"],
-        text=values, textposition="outside"
-    ))
-    fig.update_layout(
-        title="Health Parameter Overview",
-        xaxis_title="Parameter", yaxis_title="Value",
-        template=plot_template, height=400,
-        margin=dict(t=50, b=40)
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-    c1, c2 = st.columns(2)
-    with c1:
-        g = go.Figure(go.Indicator(
-            mode="gauge+number",
-            value=patient_data["Glucose"],
-            title={"text": "Glucose Level (mg/dL)"},
-            gauge={
-                "axis": {"range": [0, 250]},
-                "bar": {"color": "#FF6B9A"},
-                "steps": [
-                    {"range": [0, 99],    "color": "#DCFCE7"},
-                    {"range": [100, 125], "color": "#FEF9C3"},
-                    {"range": [126, 250], "color": "#FFE4E6"}
-                ],
-                "threshold": {"line": {"color": "red", "width": 3}, "value": 126}
-            }
-        ))
-        g.update_layout(height=300, template=plot_template, margin=dict(t=40, b=20))
-        st.plotly_chart(g, use_container_width=True)
-
-    with c2:
-        bg2 = go.Figure(go.Indicator(
-            mode="gauge+number",
-            value=patient_data["BMI"],
-            title={"text": "BMI"},
-            gauge={
-                "axis": {"range": [0, 70]},
-                "bar": {"color": "#4D96FF"},
-                "steps": [
-                    {"range": [0, 18.4],    "color": "#FEF9C3"},
-                    {"range": [18.5, 24.9], "color": "#DCFCE7"},
-                    {"range": [25, 29.9],   "color": "#FEF9C3"},
-                    {"range": [30, 70],     "color": "#FFE4E6"}
-                ],
-                "threshold": {"line": {"color": "orange", "width": 3}, "value": 25}
-            }
-        ))
-        bg2.update_layout(height=300, template=plot_template, margin=dict(t=40, b=20))
-        st.plotly_chart(bg2, use_container_width=True)
-
-
-# ==============================
-# SUGGESTIONS CARD
-# ==============================
-def show_health_suggestions(patient_data):
-    suggestions = get_suggestions(patient_data)
-
-    if dark_mode:
-        card_bg   = "linear-gradient(135deg, #081C3A, #0D5B63)"
-        title_col = "#FFFFFF"
-        desc_col  = "#A7F3D0"
-    else:
-        card_bg   = "linear-gradient(135deg, #EFF6FF, #DBEAFE)"
-        title_col = "#0F172A"
-        desc_col  = "#1E40AF"
-
-    items_html = "".join([f"""
-    <li style="margin-bottom:10px; color:{desc_col}; font-size:15px; font-weight:500;">{s}</li>
-    """ for s in suggestions])
-
-    components.html(f"""
-    <div style="background:{card_bg}; padding:30px 36px; border-radius:24px;
-                box-shadow:0 8px 28px rgba(0,0,0,0.12); font-family:Arial,sans-serif;">
-        <h2 style="color:{title_col}; font-size:22px; font-weight:800; margin-bottom:16px;">
-            💡 Personalized Health Recommendations
-        </h2>
-        <ul style="margin:0; padding-left:22px; line-height:1.8;">{items_html}</ul>
-    </div>
-    """, height=270)
-
+            if st.button("Enroll Patient and Open Prediction"):
+                if not p_name or not p_id:
+                    st.warning("Please enter Patient Name and Patient ID.")
+                else:
+                    st.session_state.active_patient_name = p_name
+                    st.session_state.active_patient_id = p_id
+                    st.session_state.active_patient_age = p_age
+                    st.session_state.active_patient_gender = p_gender
+                    st.session_state.selected_menu = "🔬 Prediction"
+                    st.success(f"Patient {p_name} enrolled successfully.")
+                    st.rerun()
 
 # ==============================
 # PREDICTION PAGE
 # ==============================
-def prediction_page():
-    st.title("🩺 Diabetes Risk Prediction")
-
-    st.markdown("### 👤 Patient Information")
-    st.caption("You can edit or type your name and email below.")
-
-    pinfo_col1, pinfo_col2 = st.columns(2)
-    with pinfo_col1:
-        patient_name_input = st.text_input(
-            "Patient Full Name",
-            value=st.session_state.current_user_name,
-            placeholder="Enter your full name...",
-        )
-    with pinfo_col2:
-        patient_email_input = st.text_input(
-            "Patient Email ID",
-            value=st.session_state.current_user_email,
-            placeholder="example@email.com",
-        )
-
-    if not patient_name_input.strip():
-        st.warning("Patient name is required for the report.")
-
-    st.markdown("---")
-    st.markdown("### 🔬 Clinical Health Parameters")
-    st.write("Fill in your health values below:")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        preg    = st.number_input("Pregnancies", 0, 20, 1)
-        glucose = st.number_input("Glucose (mg/dL)", 50, 250, 120)
-        bp      = st.number_input("Blood Pressure (mm Hg)", 30, 140, 70)
-        skin    = st.number_input("Skin Thickness (mm)", 0, 100, 20)
-
-    with col2:
-        insulin = st.number_input("Insulin (μU/mL)", 0, 400, 100)
-        bmi     = st.number_input("BMI", 10.0, 70.0, 25.0)
-        dpf     = st.number_input("Diabetes Pedigree Function", 0.0, 3.0, 0.5)
-        age     = st.number_input("Age", 1, 100, 30)
-
-    st.write("")
-    if st.button("🔍 Predict Diabetes Risk", use_container_width=True):
-
-        if not patient_name_input.strip():
-            st.error("Please enter the patient name first.")
-            st.stop()
-
-        final_name  = patient_name_input.strip()
-        final_email = patient_email_input.strip()
-        st.session_state.current_user_name  = final_name
-        st.session_state.current_user_email = final_email
-
-        patient_data = {
-            "Pregnancies": preg, "Glucose": glucose,
-            "BloodPressure": bp, "SkinThickness": skin,
-            "Insulin": insulin, "BMI": bmi,
-            "DiabetesPedigreeFunction": dpf, "Age": age
-        }
-
-        input_raw = pd.DataFrame([patient_data])
-        input_raw["Glucose_BMI"]     = input_raw["Glucose"] * input_raw["BMI"]
-        input_raw["Insulin_Glucose"] = input_raw["Insulin"] * input_raw["Glucose"]
-        input_raw["Age_BMI"]         = input_raw["Age"] * input_raw["BMI"]
-        input_raw["BMI_Squared"]     = input_raw["BMI"] ** 2
-
-        input_encoded = pd.get_dummies(input_raw)
-        input_df      = input_encoded.reindex(columns=columns, fill_value=0)
-        prediction    = model.predict(input_df)
-
-        if hasattr(model, "predict_proba"):
-            prob = model.predict_proba(input_df)[0]
-            if prediction[0] == 1:
-                result     = "High Risk of Diabetes"
-                confidence = round(prob[1] * 100, 2)
-            else:
-                result     = "Low Risk of Diabetes"
-                confidence = round(prob[0] * 100, 2)
-        else:
-            result     = "High Risk of Diabetes" if prediction[0] == 1 else "Low Risk of Diabetes"
-            confidence = "N/A"
-
-        pred_time = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
-
-        st.session_state.prediction_done   = True
-        st.session_state.patient_data      = patient_data
-        st.session_state.prediction_result = result
-        st.session_state.confidence        = confidence
-        st.session_state.prediction_time   = pred_time
-        st.session_state.pdf_bytes = generate_pdf_report(
-            patient_data, result, confidence,
-            final_name, final_email, pred_time
-        )
-
-        st.session_state.page = "Results"
-        st.rerun()
-
-
-# ==============================
-# RESULTS PAGE
-# ==============================
-def results_page():
-    st.title("📋 Prediction Results")
-
-    if not st.session_state.prediction_done:
-        st.warning("No prediction found. Please go to the Prediction page and submit your details first.")
-        if st.button("🔙 Go to Prediction"):
-            st.session_state.page = "Prediction"
-            st.rerun()
-        return
-
-    result       = st.session_state.prediction_result
-    patient_data = st.session_state.patient_data
-    confidence   = st.session_state.confidence
-    pred_time    = st.session_state.prediction_time
-    name         = st.session_state.current_user_name
-    email        = st.session_state.current_user_email
-    pdf_bytes    = st.session_state.pdf_bytes
-
-    # Patient Info Card
-    st.markdown(f"""
-    <div class="patient-info-card">
-        <div class="patient-info-row">
-            <div class="patient-info-item">
-                <label>Patient Name</label>
-                <span>{name}</span>
-            </div>
-            <div class="patient-info-item">
-                <label>Email ID</label>
-                <span>{email}</span>
-            </div>
-            <div class="patient-info-item">
-                <label>Report Date</label>
-                <span>{pred_time[:10] if pred_time else "—"}</span>
-            </div>
-            <div class="patient-info-item">
-                <label>Report Time</label>
-                <span>{pred_time[11:] if pred_time else "—"}</span>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Result Banner
-    if result == "High Risk of Diabetes":
-        st.markdown(f"""
-        <div class="result-high">
-            ⚠️ High Risk of Diabetes
-            <br><span style="font-size:17px;font-weight:600;">Prediction Confidence: {confidence}%</span>
-        </div>
-        """, unsafe_allow_html=True)
+elif menu == "🔬 Prediction":
+    if not st.session_state.logged_in:
+        st.warning("Please login first.")
     else:
-        st.markdown(f"""
-        <div class="result-low">
-            ✅ Low Risk of Diabetes
-            <br><span style="font-size:17px;font-weight:600;">Prediction Confidence: {confidence}%</span>
-        </div>
-        """, unsafe_allow_html=True)
+        current_user = get_current_user_data()
 
-    st.write("")
+        if not st.session_state.active_patient_name and current_user.get("role") == "Patient":
+            st.session_state.active_patient_name = current_user.get("full_name", "")
+            st.session_state.active_patient_id = current_user.get("patient_id", "")
+            st.session_state.active_patient_age = current_user.get("age")
+            st.session_state.active_patient_gender = current_user.get("gender", "")
 
-    # Parameter Summary Grid
-    st.subheader("🧾 Submitted Health Parameters")
-    params = list(patient_data.items())
-    cols   = st.columns(4)
-    for i, (k, v) in enumerate(params):
-        with cols[i % 4]:
+        st.markdown('<div class="accent-line"></div>', unsafe_allow_html=True)
+
+        header_col, photo_col = st.columns([4, 1])
+
+        with header_col:
+            st.markdown("## Diabetes Risk Assessment")
+            st.markdown("Enter the patient's health values and click **Run Prediction**.")
+
+            patient_name = st.text_input(
+                "Patient Name",
+                value=st.session_state.active_patient_name or current_user.get("full_name", ""),
+                placeholder="Enter patient name"
+            )
+            patient_id = st.text_input(
+                "Patient ID",
+                value=st.session_state.active_patient_id or "PT-001",
+                placeholder="Enter patient ID"
+            )
+
+            st.session_state.active_patient_name = patient_name
+            st.session_state.active_patient_id = patient_id
+
+        with photo_col:
+            if st.session_state.patient_photo:
+                st.markdown(f"""
+                <div style='text-align:right;'>
+                  <img src="data:image/png;base64,{st.session_state.patient_photo}"
+                       style="border-radius:12px; width:72px; height:72px;
+                       object-fit:cover; border:2px solid #0284C7;" />
+                </div>
+                """, unsafe_allow_html=True)
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("##### Basic Health Values")
+            preg = st.number_input("Pregnancies", 0, 20, 1)
+            glucose = st.number_input("Glucose (mg/dL)", 50, 200, 120)
+            bp = st.number_input("Blood Pressure (mm Hg)", 30, 120, 70)
+            skin = st.number_input("Skin Thickness (mm)", 0, 100, 20)
+
+        with col2:
+            st.markdown("##### Body and Family Health Values")
+            insulin = st.number_input("Insulin (μU/mL)", 0, 300, 100)
+            bmi = st.number_input("BMI (kg/m²)", 10.0, 60.0, 25.0)
+            dpf = st.number_input("Diabetes Pedigree Function", 0.0, 3.0, 0.5)
+            default_age = int(st.session_state.active_patient_age) if st.session_state.active_patient_age else 30
+            age = st.number_input("Age (years)", 1, 100, default_age)
+
+        if st.button("Run Prediction"):
+            input_raw = pd.DataFrame({
+                'Pregnancies': [preg],
+                'Glucose': [glucose],
+                'BloodPressure': [bp],
+                'SkinThickness': [skin],
+                'Insulin': [insulin],
+                'BMI': [bmi],
+                'DiabetesPedigreeFunction': [dpf],
+                'Age': [age]
+            })
+
+            input_raw['Glucose_BMI'] = input_raw['Glucose'] * input_raw['BMI']
+            input_raw['Insulin_Glucose'] = input_raw['Insulin'] * input_raw['Glucose']
+            input_raw['Age_BMI'] = input_raw['Age'] * input_raw['BMI']
+            input_raw['BMI_Squared'] = input_raw['BMI'] ** 2
+
+            input_encoded = pd.get_dummies(input_raw)
+            input_df = input_encoded.reindex(columns=columns, fill_value=0)
+
+            prediction = model.predict(input_df)
+
+            try:
+                probability = model.predict_proba(input_df)[0][1]
+            except Exception:
+                probability = None
+
+            st.session_state.input_raw = input_raw
+            st.session_state.prediction = prediction[0]
+            st.session_state.probability = probability
+            st.session_state.prediction_done = True
+            st.session_state.selected_menu = "📊 Visualization"
+            st.rerun()
+
+# ==============================
+# VISUALIZATION PAGE
+# ==============================
+elif menu == "📊 Visualization":
+    if not st.session_state.logged_in:
+        st.warning("Please login first.")
+    elif not st.session_state.prediction_done or st.session_state.input_raw is None:
+        st.info("Please complete prediction first. Open the Prediction page and click Run Prediction.")
+        if st.button("Open Prediction Page"):
+            st.session_state.selected_menu = "🔬 Prediction"
+            st.rerun()
+    else:
+        input_raw = st.session_state.input_raw
+        prediction_value = st.session_state.prediction
+        probability = st.session_state.probability
+
+        glucose = input_raw["Glucose"].values[0]
+        bp = input_raw["BloodPressure"].values[0]
+        skin = input_raw["SkinThickness"].values[0]
+        insulin = input_raw["Insulin"].values[0]
+        bmi = input_raw["BMI"].values[0]
+        dpf = input_raw["DiabetesPedigreeFunction"].values[0]
+        age = input_raw["Age"].values[0]
+
+        st.markdown("### Prediction Result")
+        st.markdown(f"**Patient Name:** {st.session_state.active_patient_name or 'Not provided'}")
+        st.markdown(f"**Patient ID:** {st.session_state.active_patient_id or 'Not provided'}")
+
+        if prediction_value == 1:
+            result_text = "High Risk of Diabetes"
+            confidence = round(probability * 100, 2) if probability else "N/A"
             st.markdown(f"""
-            <div class="param-card">
-                <div class="param-label">{k}</div>
-                <div class="param-value">{v}</div>
+            <div class="result-high">
+                ⚠️ High Risk of Diabetes
+                <br><span style="font-size:17px;font-weight:600;">Prediction Confidence: {confidence}%</span>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            result_text = "Low Risk of Diabetes"
+            confidence = round((1 - probability) * 100, 2) if probability else "N/A"
+            st.markdown(f"""
+            <div class="result-low">
+                ✅ Low Risk of Diabetes
+                <br><span style="font-size:17px;font-weight:600;">Prediction Confidence: {confidence}%</span>
             </div>
             """, unsafe_allow_html=True)
 
-    st.write("")
-    show_patient_analytics(patient_data)
-    st.write("")
-    show_health_suggestions(patient_data)
-    st.write("")
+        st.write("")
 
-    # Action Buttons
-    b1, b2 = st.columns(2)
-    with b1:
-        st.download_button(
-            label="📄 Download PDF Report",
-            data=pdf_bytes,
-            file_name=f"glucotrack_{name.replace(' ', '_')}_report.pdf",
-            mime="application/pdf",
-            use_container_width=True
+        # Parameter Summary Grid
+        st.subheader("🧾 Submitted Health Parameters")
+        patient_data_dict = {
+            "Pregnancies": input_raw["Pregnancies"].values[0],
+            "Glucose": glucose,
+            "BloodPressure": bp,
+            "SkinThickness": skin,
+            "Insulin": insulin,
+            "BMI": bmi,
+            "DiabetesPedigreeFunction": dpf,
+            "Age": age
+        }
+        params = list(patient_data_dict.items())
+        cols = st.columns(4)
+        for i, (k, v) in enumerate(params):
+            with cols[i % 4]:
+                st.markdown(f"""
+                <div class="param-card">
+                    <div class="param-label">{k}</div>
+                    <div class="param-value">{v}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+        st.write("")
+
+        # Analytics with Plotly
+        st.subheader("📊 Patient Health Analytics")
+
+        metrics = ["Glucose", "BMI", "Insulin", "BloodPressure", "Age"]
+        values = [glucose, bmi, insulin, bp, age]
+
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            x=metrics, y=values,
+            marker_color=["#FF6B9A", "#4D96FF", "#F4A261", "#52B788", "#9D79BC"],
+            text=values, textposition="outside"
+        ))
+        fig.update_layout(
+            title="Health Parameter Overview",
+            xaxis_title="Parameter", yaxis_title="Value",
+            template=plot_template, height=400,
+            margin=dict(t=50, b=40)
         )
-    with b2:
-        if st.button("🔁 New Prediction", use_container_width=True):
-            for k in ["prediction_done", "patient_data", "prediction_result",
-                      "confidence", "pdf_bytes", "prediction_time"]:
-                st.session_state[k] = defaults[k]
-            st.session_state.page = "Prediction"
-            st.rerun()
+        st.plotly_chart(fig, use_container_width=True)
 
-    # WhatsApp PDF Share
-    st.write("")
+        c1, c2 = st.columns(2)
+        with c1:
+            g = go.Figure(go.Indicator(
+                mode="gauge+number",
+                value=glucose,
+                title={"text": "Glucose Level (mg/dL)"},
+                gauge={
+                    "axis": {"range": [0, 250]},
+                    "bar": {"color": "#FF6B9A"},
+                    "steps": [
+                        {"range": [0, 99], "color": "#DCFCE7"},
+                        {"range": [100, 125], "color": "#FEF9C3"},
+                        {"range": [126, 250], "color": "#FFE4E6"}
+                    ],
+                    "threshold": {"line": {"color": "red", "width": 3}, "value": 126}
+                }
+            ))
+            g.update_layout(height=300, template=plot_template, margin=dict(t=40, b=20))
+            st.plotly_chart(g, use_container_width=True)
+
+        with c2:
+            bg2 = go.Figure(go.Indicator(
+                mode="gauge+number",
+                value=bmi,
+                title={"text": "BMI"},
+                gauge={
+                    "axis": {"range": [0, 70]},
+                    "bar": {"color": "#4D96FF"},
+                    "steps": [
+                        {"range": [0, 18.4], "color": "#FEF9C3"},
+                        {"range": [18.5, 24.9], "color": "#DCFCE7"},
+                        {"range": [25, 29.9], "color": "#FEF9C3"},
+                        {"range": [30, 70], "color": "#FFE4E6"}
+                    ],
+                    "threshold": {"line": {"color": "orange", "width": 3}, "value": 25}
+                }
+            ))
+            bg2.update_layout(height=300, template=plot_template, margin=dict(t=40, b=20))
+            st.plotly_chart(bg2, use_container_width=True)
+
+        st.write("")
+
+        # Health Suggestions
+        suggestions = get_suggestions(patient_data_dict)
+        
+        if is_dark:
+            sugg_card_bg = "linear-gradient(135deg, #081C3A, #0D5B63)"
+            sugg_title_col = "#FFFFFF"
+            sugg_desc_col = "#A7F3D0"
+        else:
+            sugg_card_bg = "linear-gradient(135deg, #EFF6FF, #DBEAFE)"
+            sugg_title_col = "#0F172A"
+            sugg_desc_col = "#1E40AF"
+
+        items_html = "".join([f"""
+        <li style="margin-bottom:10px; color:{sugg_desc_col}; font-size:15px; font-weight:500;">{s}</li>
+        """ for s in suggestions])
+
+        st.markdown(f"""
+        <div style="background:{sugg_card_bg}; padding:30px 36px; border-radius:24px;
+                    box-shadow:0 8px 28px rgba(0,0,0,0.12); font-family:Arial,sans-serif; margin-top:20px;">
+            <h2 style="color:{sugg_title_col}; font-size:22px; font-weight:800; margin-bottom:16px;">
+                💡 Personalized Health Recommendations
+            </h2>
+            <ul style="margin:0; padding-left:22px; line-height:1.8;">{items_html}</ul>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.write("")
+        st.markdown("---")
+        st.markdown("## Patient Report")
+
+        patient_name_report = st.text_input(
+            "Patient Name for Report",
+            value=st.session_state.active_patient_name or "Unknown Patient"
+        )
+        patient_id_report = st.text_input(
+            "Patient ID for Report",
+            value=st.session_state.active_patient_id or "PT-001"
+        )
+
+        if st.button("Generate Professional Report"):
+            report_path = generate_patient_report(
+                patient_name_report,
+                patient_id_report,
+                result_text,
+                input_raw[['Pregnancies', 'Glucose', 'BloodPressure',
+                           'SkinThickness', 'Insulin', 'BMI',
+                           'DiabetesPedigreeFunction', 'Age']],
+                st.session_state.patient_photo
+            )
+
+            with open(report_path, "rb") as pdf_file:
+                pdf_bytes = pdf_file.read()
+
+            st.success("Professional report generated successfully.")
+
+            st.markdown("""
+            <div class="card" style="border-left:5px solid #0284C7;">
+                <h4 style="margin-bottom:0.4rem;">Report Ready</h4>
+                <p style="margin-bottom:0.2rem;">Download the PDF report or share the PDF file from the browser share button.</p>
+                <p style="font-size:0.85rem; opacity:0.75;">The PDF file share button works best on mobile browsers. If desktop browser blocks file sharing, download the PDF and attach it in WhatsApp.</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+            pdf_file_name = f"{patient_name_report}_professional_report.pdf"
+
+            st.download_button(
+                label="📄 Download Professional PDF Report",
+                data=pdf_bytes,
+                file_name=pdf_file_name,
+                mime="application/pdf"
+            )
+
+            share_caption = (
+                f"GLUCOTRACK Diabetes Prediction Report\n"
+                f"Patient Name: {patient_name_report}\n"
+                f"Patient ID: {patient_id_report}\n"
+                f"Prediction Result: {result_text}"
+            )
+            build_whatsapp_file_share_button(pdf_bytes, pdf_file_name, share_caption)
+
+            whatsapp_message = quote(
+                f"GLUCOTRACK Diabetes Prediction Report\n\n"
+                f"Patient Name: {patient_name_report}\n"
+                f"Patient ID: {patient_id_report}\n"
+                f"Prediction Result: {result_text}\n"
+                f"Glucose: {input_raw['Glucose'].values[0]} mg/dL\n"
+                f"BMI: {input_raw['BMI'].values[0]} kg/m²\n"
+                f"Blood Pressure: {input_raw['BloodPressure'].values[0]} mm Hg\n\n"
+                f"PDF report has been generated. Please attach the downloaded PDF if required."
+            )
+
+            whatsapp_url = f"[wa.me](https://wa.me/?text={whatsapp_message})"
+
+            st.markdown(
+                f"""
+                <a href="{whatsapp_url}" target="_blank" style="text-decoration:none;">
+                    <button style="
+                        background:linear-gradient(135deg,#16A34A,#22C55E);
+                        color:white;
+                        border:none;
+                        padding:12px 20px;
+                        border-radius:12px;
+                        cursor:pointer;
+                        font-weight:700;
+                        margin-top:10px;
+                        box-shadow:0 8px 20px rgba(34,197,94,0.25);">
+                        Share Report Summary on WhatsApp
+                    </button>
+                </a>
+                """,
+                unsafe_allow_html=True
+            )
+
+        st.write("")
+        b1, b2 = st.columns(2)
+        with b2:
+            if st.button("🔁 New Prediction", use_container_width=True):
+                st.session_state.prediction_done = False
+                st.session_state.input_raw = None
+                st.session_state.prediction = None
+                st.session_state.probability = None
+                st.session_state.selected_menu = "🔬 Prediction"
+                st.rerun()
+
+# ==============================
+# ABOUT PAGE
+# ==============================
+elif menu == "ℹ️ About":
+    st.markdown('<div class="accent-line"></div>', unsafe_allow_html=True)
+    st.markdown("## About GlucoTrack")
+
     st.markdown("""
-    <div style="background:linear-gradient(135deg,#dcfce7,#bbf7d0);
-                border:2px solid #4ade80; border-radius:20px; padding:22px 26px;">
-        <div style="font-size:20px;font-weight:800;color:#14532d;">
-            📲 Share PDF Report via WhatsApp
-        </div>
-        <div style="font-size:13px;color:#166534;margin-top:4px;">
-            Click the button below to share the PDF file directly.
-            Works best on mobile browsers. On desktop, please download
-            the PDF and attach it manually in WhatsApp.
-        </div>
+    <div class="card">
+      <p>GlucoTrack is a diabetes risk prediction system powered by a supervised machine learning model.</p>
+      <p>It uses patient medical values to predict whether the patient may have low or high diabetes risk.</p>
+      <p><b>Important:</b> This tool is only for project and demo purposes. It should not replace medical advice from a qualified doctor.</p>
     </div>
     """, unsafe_allow_html=True)
 
-    st.write("")
-
-    pdf_file_name = f"glucotrack_{name.replace(' ', '_')}_report.pdf"
-    share_caption = (
-        f"GlucoTrack Diabetes Risk Report\n"
-        f"Patient Name: {name}\n"
-        f"Email: {email}\n"
-        f"Prediction Result: {result}\n"
-        f"Confidence: {confidence}%"
-    )
-    build_whatsapp_file_share_button(pdf_bytes, pdf_file_name, share_caption)
-
-    st.write("")
-    st.caption("This prediction is generated by a Machine Learning model and does not replace professional medical advice.")
-
+    st.markdown("### Key Features")
+    c1, c2, c3, c4 = st.columns(4)
+    features = [
+        ("Fast", "Prediction", "The system gives the diabetes risk result within a few seconds after entering patient values. This helps in quick screening and project demonstration."),
+        ("8", "Main Inputs", "It uses 8 important medical inputs including glucose, BMI, blood pressure, insulin, age, pregnancies, skin thickness and diabetes pedigree function."),
+        ("OTP", "Login", "Users can log in with a password or OTP using their registered email ID or phone number. This makes access more flexible and secure."),
+        ("PDF", "Report", "The app creates a professional patient report with result, input values, charts and health advice. The report can be downloaded and shared."),
+    ]
+    for col, (value, title, desc) in zip([c1, c2, c3, c4], features):
+        with col:
+            st.markdown(f"""
+            <div class="card" style="text-align:center; min-height:200px;">
+              <div style="font-size:2rem; font-weight:800; color:#0284C7;">{value}</div>
+              <div style="font-size:0.9rem; font-weight:800; letter-spacing:0.04em; text-transform:uppercase; margin:0.5rem 0;">{title}</div>
+              <div style="font-size:0.85rem; line-height:1.55; opacity:0.85;">{desc}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
 # ==============================
-# ROUTING
+# SIDEBAR LOGOUT BUTTON
 # ==============================
-page = st.session_state.page
+if st.session_state.get("logged_in", False):
+    st.sidebar.markdown("<br>", unsafe_allow_html=True)
 
-if page == "User Login":
-    user_login()
-elif page == "Sign Up":
-    signup()
-elif page == "Admin Login":
-    admin_login()
-elif page == "Admin Dashboard":
-    admin_dashboard()
-elif page == "Prediction":
-    prediction_page()
-elif page == "Results":
-    results_page()
+    if st.sidebar.button("🚪 Logout", use_container_width=True):
+        st.session_state.logged_in = False
+        st.session_state.current_user = None
+        st.session_state.patient_photo = None
+        st.session_state.selected_menu = "🏠 Welcome"
+        st.session_state.active_patient_name = ""
+        st.session_state.active_patient_id = ""
+        st.session_state.active_patient_age = None
+        st.session_state.active_patient_gender = ""
+        st.session_state.prediction_done = False
+        st.session_state.input_raw = None
+        st.session_state.prediction = None
+        st.session_state.probability = None
+
+        st.rerun()

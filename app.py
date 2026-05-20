@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import pickle
 import base64
+import os
 from datetime import datetime
 from io import BytesIO
 import plotly.graph_objects as go
@@ -21,8 +22,18 @@ st.set_page_config(
 # ==============================
 # LOAD MODEL
 # ==============================
-model = pickle.load(open("diabetes_model.pkl", "rb"))
-columns = pickle.load(open("columns.pkl", "rb"))
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+try:
+    model   = pickle.load(open(os.path.join(BASE_DIR, "diabetes_model.pkl"), "rb"))
+    columns = pickle.load(open(os.path.join(BASE_DIR, "columns.pkl"), "rb"))
+except FileNotFoundError as e:
+    st.error(
+        f"Model file not found: {e}\n\n"
+        "Please make sure **diabetes_model.pkl** and **columns.pkl** are present "
+        "in the same folder as app.py and are pushed to your repository."
+    )
+    st.stop()
 
 # ==============================
 # SESSION STATE
@@ -185,7 +196,6 @@ div[data-baseweb="select"] * {{ color: {input_text} !important; }}
     color: rgba(255,255,255,0.80) !important;
     font-weight: 500;
 }}
-
 .feat-card {{
     border-radius: 24px;
     padding: 32px 26px;
@@ -206,11 +216,9 @@ div[data-baseweb="select"] * {{ color: {input_text} !important; }}
     margin-bottom: 14px;
     background: rgba(255,255,255,0.35);
 }}
-
 .section-heading {{ text-align: center; margin: 48px 0 8px; }}
 .section-heading h2 {{ font-size: 32px; font-weight: 900; color: {text} !important; }}
 .section-heading p {{ font-size: 16px; color: {text} !important; opacity: 0.65; margin-top: 4px; }}
-
 .step-card {{
     background: {step_bg};
     border: 1.5px solid {step_border};
@@ -222,7 +230,6 @@ div[data-baseweb="select"] * {{ color: {input_text} !important; }}
 .step-num {{ font-size: 36px; font-weight: 900; color: {accent} !important; margin-bottom: 8px; }}
 .step-title {{ font-size: 15px; font-weight: 700; color: {step_txt} !important; margin-bottom: 6px; }}
 .step-desc {{ font-size: 13px; color: {step_txt} !important; opacity: 0.75; line-height: 1.5; }}
-
 .result-high {{
     background: linear-gradient(135deg, #FFE4E6, #FECDD3);
     color: #BE123C !important;
@@ -245,7 +252,6 @@ div[data-baseweb="select"] * {{ color: {input_text} !important; }}
     border: 2px solid #86EFAC;
     box-shadow: 0 8px 24px rgba(22,101,52,0.12);
 }}
-
 .patient-info-card {{
     background: {card};
     border-radius: 20px;
@@ -274,7 +280,6 @@ div[data-baseweb="select"] * {{ color: {input_text} !important; }}
     font-weight: 600;
     color: {text} !important;
 }}
-
 .param-card {{
     background: {card};
     border-radius: 16px;
@@ -296,7 +301,6 @@ div[data-baseweb="select"] * {{ color: {input_text} !important; }}
     font-weight: 900;
     color: {text} !important;
 }}
-
 .stButton>button, .stDownloadButton>button {{
     background: linear-gradient(135deg, #0284C7, #0EA5E9) !important;
     color: white !important;
@@ -310,7 +314,6 @@ div[data-baseweb="select"] * {{ color: {input_text} !important; }}
     background: linear-gradient(135deg, #0369A1, #0284C7) !important;
     color: white !important;
 }}
-
 .stMarkdown, label, p, h1, h2, h3, h4, h5, h6, span {{
     color: {input_text} !important;
 }}
@@ -320,14 +323,8 @@ div[data-baseweb="select"] * {{ color: {input_text} !important; }}
 
 # ==============================
 # WHATSAPP PDF FILE SHARE BUTTON
-# (Ported from Code 1 — uses Web Share API for direct PDF file sharing)
 # ==============================
 def build_whatsapp_file_share_button(pdf_bytes, file_name, caption):
-    """
-    Creates a browser-native share button that shares the PDF file directly.
-    Works best on mobile browsers that support the Web Share API with files.
-    On desktop, it falls back to a download-and-attach instruction.
-    """
     pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
     safe_caption = caption.replace("`", "'").replace("\\", "\\\\")
     components.html(f"""
@@ -569,14 +566,14 @@ if st.session_state.logged_in:
 # ==============================
 def user_login():
     st.title("🔐 User Login")
-    email = st.text_input("Email ID")
+    email    = st.text_input("Email ID")
     password = st.text_input("Password", type="password")
     if st.button("Login"):
         users = st.session_state.users
         if email in users and users[email]["password"] == password:
             st.session_state.logged_in = True
             st.session_state.role = "User"
-            st.session_state.current_user_name = users[email]["name"]
+            st.session_state.current_user_name  = users[email]["name"]
             st.session_state.current_user_email = email
             st.session_state.page = "Prediction"
             st.rerun()
@@ -594,9 +591,9 @@ def signup():
             phone     = st.text_input("Phone Number")
             age       = st.number_input("Age", 1, 100, 25)
         with col2:
-            gender      = st.selectbox("Gender", ["Female", "Male", "Other"])
-            address     = st.text_area("Address")
-            new_pass    = st.text_input("Create Password", type="password")
+            gender       = st.selectbox("Gender", ["Female", "Male", "Other"])
+            address      = st.text_area("Address")
+            new_pass     = st.text_input("Create Password", type="password")
             confirm_pass = st.text_input("Confirm Password", type="password")
         submit = st.form_submit_button("Create Account")
         if submit:
@@ -619,7 +616,7 @@ def admin_login():
         if email in st.session_state.admins and st.session_state.admins[email] == password:
             st.session_state.logged_in = True
             st.session_state.role = "Admin"
-            st.session_state.current_user_name = "Admin"
+            st.session_state.current_user_name  = "Admin"
             st.session_state.current_user_email = email
             st.session_state.page = "Admin Dashboard"
             st.rerun()
@@ -671,7 +668,7 @@ def get_suggestions(patient_data):
             "Maintain a balanced diet rich in vegetables and whole grains.",
             "Exercise regularly to stay active and healthy.",
             "Drink at least 8 glasses of water daily.",
-            "Get 7–8 hours of quality sleep every night."
+            "Get 7-8 hours of quality sleep every night."
         ]
 
 
@@ -683,7 +680,6 @@ def generate_pdf_report(patient_data, result, confidence, patient_name, patient_
     pdf    = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
 
-    # Header
     pdf.setFillColorRGB(0.05, 0.52, 0.78)
     pdf.rect(0, height - 80, width, 80, fill=True, stroke=False)
     pdf.setFillColorRGB(1, 1, 1)
@@ -694,7 +690,6 @@ def generate_pdf_report(patient_data, result, confidence, patient_name, patient_
 
     y = height - 110
 
-    # Patient info box
     pdf.setFillColorRGB(0.94, 0.97, 1.0)
     pdf.rect(30, y - 55, width - 60, 62, fill=True, stroke=False)
     pdf.setFillColorRGB(0.05, 0.52, 0.78)
@@ -705,7 +700,6 @@ def generate_pdf_report(patient_data, result, confidence, patient_name, patient_
     pdf.drawString(300, y - 32, f"Time:  {prediction_time[11:]}")
     y -= 78
 
-    # Health Parameters section
     pdf.setFillColorRGB(0.1, 0.1, 0.1)
     pdf.setFont("Helvetica-Bold", 13)
     pdf.drawString(40, y, "Health Parameters")
@@ -715,8 +709,8 @@ def generate_pdf_report(patient_data, result, confidence, patient_name, patient_
     pdf.line(40, y, width - 40, y)
     y -= 20
 
-    items   = list(patient_data.items())
-    col2_x  = width // 2 + 20
+    items  = list(patient_data.items())
+    col2_x = width // 2 + 20
     for i in range(0, len(items), 2):
         k1, v1 = items[i]
         pdf.setFillColorRGB(0.05, 0.52, 0.78)
@@ -737,7 +731,6 @@ def generate_pdf_report(patient_data, result, confidence, patient_name, patient_
 
     y -= 14
 
-    # Prediction Result section
     pdf.setFillColorRGB(0.1, 0.1, 0.1)
     pdf.setFont("Helvetica-Bold", 13)
     pdf.drawString(40, y, "Prediction Result")
@@ -758,7 +751,6 @@ def generate_pdf_report(patient_data, result, confidence, patient_name, patient_
     pdf.drawString(55, y, f"{result}     |     Confidence: {confidence}%")
     y -= 52
 
-    # Recommendations section
     pdf.setFillColorRGB(0.1, 0.1, 0.1)
     pdf.setFont("Helvetica-Bold", 13)
     pdf.drawString(40, y, "Personalized Health Recommendations")
@@ -780,7 +772,6 @@ def generate_pdf_report(patient_data, result, confidence, patient_name, patient_
     pdf.setFont("Helvetica-Oblique", 9)
     pdf.drawString(40, y, "This report is generated by GlucoTrack ML model and does not replace professional medical advice.")
 
-    # Footer
     pdf.setFillColorRGB(0.05, 0.52, 0.78)
     pdf.rect(0, 0, width, 28, fill=True, stroke=False)
     pdf.setFillColorRGB(1, 1, 1)
@@ -910,7 +901,7 @@ def prediction_page():
         )
 
     if not patient_name_input.strip():
-        st.warning("⚠️ Patient name is required for the report.")
+        st.warning("Patient name is required for the report.")
 
     st.markdown("---")
     st.markdown("### 🔬 Clinical Health Parameters")
@@ -934,7 +925,7 @@ def prediction_page():
     if st.button("🔍 Predict Diabetes Risk", use_container_width=True):
 
         if not patient_name_input.strip():
-            st.error("❌ Please enter the patient name first!")
+            st.error("Please enter the patient name first.")
             st.stop()
 
         final_name  = patient_name_input.strip()
@@ -950,10 +941,10 @@ def prediction_page():
         }
 
         input_raw = pd.DataFrame([patient_data])
-        input_raw["Glucose_BMI"]      = input_raw["Glucose"] * input_raw["BMI"]
-        input_raw["Insulin_Glucose"]  = input_raw["Insulin"] * input_raw["Glucose"]
-        input_raw["Age_BMI"]          = input_raw["Age"] * input_raw["BMI"]
-        input_raw["BMI_Squared"]      = input_raw["BMI"] ** 2
+        input_raw["Glucose_BMI"]     = input_raw["Glucose"] * input_raw["BMI"]
+        input_raw["Insulin_Glucose"] = input_raw["Insulin"] * input_raw["Glucose"]
+        input_raw["Age_BMI"]         = input_raw["Age"] * input_raw["BMI"]
+        input_raw["BMI_Squared"]     = input_raw["BMI"] ** 2
 
         input_encoded = pd.get_dummies(input_raw)
         input_df      = input_encoded.reindex(columns=columns, fill_value=0)
@@ -994,7 +985,7 @@ def results_page():
     st.title("📋 Prediction Results")
 
     if not st.session_state.prediction_done:
-        st.warning("⚠️ No prediction found. Please go to the Prediction page and submit your details first.")
+        st.warning("No prediction found. Please go to the Prediction page and submit your details first.")
         if st.button("🔙 Go to Prediction"):
             st.session_state.page = "Prediction"
             st.rerun()
@@ -1069,7 +1060,7 @@ def results_page():
     show_health_suggestions(patient_data)
     st.write("")
 
-    # ── Action Buttons ─────────────────────────────────────────────
+    # Action Buttons
     b1, b2 = st.columns(2)
     with b1:
         st.download_button(
@@ -1087,9 +1078,7 @@ def results_page():
             st.session_state.page = "Prediction"
             st.rerun()
 
-    # ══════════════════════════════════════════════════════════════
-    # WHATSAPP SECTION — Share PDF File directly (Web Share API)
-    # ══════════════════════════════════════════════════════════════
+    # WhatsApp PDF Share
     st.write("")
     st.markdown("""
     <div style="background:linear-gradient(135deg,#dcfce7,#bbf7d0);
@@ -1098,8 +1087,9 @@ def results_page():
             📲 Share PDF Report via WhatsApp
         </div>
         <div style="font-size:13px;color:#166534;margin-top:4px;">
-            Click the button below to share the PDF file directly. Works best on mobile browsers.
-            On desktop, please download the PDF and attach it manually in WhatsApp.
+            Click the button below to share the PDF file directly.
+            Works best on mobile browsers. On desktop, please download
+            the PDF and attach it manually in WhatsApp.
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -1117,7 +1107,7 @@ def results_page():
     build_whatsapp_file_share_button(pdf_bytes, pdf_file_name, share_caption)
 
     st.write("")
-    st.caption("⚕️ This prediction is generated by a Machine Learning model and does not replace professional medical advice.")
+    st.caption("This prediction is generated by a Machine Learning model and does not replace professional medical advice.")
 
 
 # ==============================

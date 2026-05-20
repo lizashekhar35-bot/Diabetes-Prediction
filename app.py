@@ -53,6 +53,7 @@ defaults = {
     "current_user_name": "",
     "current_user_email": "",
     "prediction_time": None,
+    "dark_mode": False,
 }
 
 for key, value in defaults.items():
@@ -62,9 +63,7 @@ for key, value in defaults.items():
 # ==============================
 # THEME
 # ==============================
-dark_mode = False
-if st.session_state.started:
-    dark_mode = st.sidebar.toggle("🌙 Dark Mode")
+dark_mode = st.session_state.dark_mode
 
 if dark_mode:
     bg = "#023047"
@@ -72,7 +71,8 @@ if dark_mode:
     text = "#FFFFFF"
     accent = "#8ECAE6"
     input_text = "#FFFFFF"
-    sidebar_bg = "linear-gradient(180deg, #012A3A, #023047, #126782)"
+    sidebar_bg = "#1A2E2A"
+    sidebar_text = "#FFFFFF"
     plot_template = "plotly_dark"
     feature_bg1 = "linear-gradient(135deg, #0C3547, #0A4A6E)"
     feature_bg2 = "linear-gradient(135deg, #0C3D1E, #0A4D28)"
@@ -83,13 +83,17 @@ if dark_mode:
     step_bg = "rgba(255,255,255,0.07)"
     step_border = "rgba(255,255,255,0.15)"
     step_txt = "#FFFFFF"
+    radio_bg = "rgba(255,255,255,0.08)"
+    radio_hover = "rgba(255,255,255,0.18)"
+    radio_selected = "rgba(255,255,255,0.22)"
 else:
     bg = "#F0F8FF"
     card = "#FFFFFF"
     text = "#1E293B"
     accent = "#0284C7"
     input_text = "#1E293B"
-    sidebar_bg = "linear-gradient(180deg, #8ECAE6, #219EBC)"
+    sidebar_bg = "#E8F5F0"
+    sidebar_text = "#1E293B"
     plot_template = "plotly_white"
     feature_bg1 = "linear-gradient(135deg, #E0F2FE, #BAE6FD)"
     feature_bg2 = "linear-gradient(135deg, #DCFCE7, #BBF7D0)"
@@ -100,32 +104,130 @@ else:
     step_bg = "rgba(2,132,199,0.07)"
     step_border = "rgba(2,132,199,0.18)"
     step_txt = "#1E293B"
+    radio_bg = "rgba(0,0,0,0.03)"
+    radio_hover = "rgba(0,0,0,0.07)"
+    radio_selected = "rgba(0,0,0,0.06)"
 
 # ==============================
 # CSS
 # ==============================
 st.markdown(f"""
 <style>
+/* ---- MAIN APP ---- */
 .stApp {{
     background: {bg};
     color: {text};
 }}
+
+/* ---- SIDEBAR BACKGROUND ---- */
 section[data-testid="stSidebar"] {{
     background: {sidebar_bg} !important;
+    border-right: 1px solid rgba(0,0,0,0.08);
 }}
-section[data-testid="stSidebar"] > div {{ background: transparent; }}
-section[data-testid="stSidebar"] * {{ color: white !important; }}
-
-div[data-testid="stRadio"] label {{
-    background: rgba(255,255,255,0.14);
-    padding: 12px 16px;
-    border-radius: 14px;
-    margin-bottom: 8px;
-    font-weight: 600;
-    display: block;
+section[data-testid="stSidebar"] > div {{
+    background: transparent !important;
+    padding-top: 0 !important;
 }}
-div[data-testid="stRadio"] label:hover {{ background: rgba(255,255,255,0.28); }}
 
+/* ---- SIDEBAR ALL TEXT ---- */
+section[data-testid="stSidebar"] *:not(button):not(button *) {{
+    color: {sidebar_text} !important;
+}}
+
+/* ---- SIDEBAR TITLE ---- */
+section[data-testid="stSidebar"] h1,
+section[data-testid="stSidebar"] h2,
+section[data-testid="stSidebar"] h3 {{
+    color: {sidebar_text} !important;
+    font-weight: 800 !important;
+}}
+
+/* ---- NAVIGATION LABEL ---- */
+section[data-testid="stSidebar"] div[data-testid="stRadio"] > label {{
+    font-size: 13px !important;
+    font-weight: 700 !important;
+    letter-spacing: 1.2px !important;
+    text-transform: uppercase !important;
+    color: {sidebar_text} !important;
+    opacity: 0.65;
+    padding: 0 !important;
+    background: transparent !important;
+    border-radius: 0 !important;
+    margin-bottom: 10px !important;
+    display: block !important;
+}}
+
+/* ---- RADIO OPTION BOXES ---- */
+section[data-testid="stSidebar"] div[data-testid="stRadio"] div[role="radiogroup"] label {{
+    background: {radio_bg} !important;
+    border-radius: 12px !important;
+    padding: 13px 16px !important;
+    margin-bottom: 8px !important;
+    font-weight: 600 !important;
+    font-size: 15px !important;
+    display: flex !important;
+    align-items: center !important;
+    cursor: pointer !important;
+    transition: background 0.2s !important;
+    border: 1px solid rgba(0,0,0,0.06) !important;
+    opacity: 1 !important;
+    letter-spacing: 0 !important;
+    text-transform: none !important;
+    color: {sidebar_text} !important;
+}}
+section[data-testid="stSidebar"] div[data-testid="stRadio"] div[role="radiogroup"] label:hover {{
+    background: {radio_hover} !important;
+}}
+section[data-testid="stSidebar"] div[data-testid="stRadio"] div[role="radiogroup"] label:has(input:checked) {{
+    background: {radio_selected} !important;
+    border: 1.5px solid rgba(2,132,199,0.35) !important;
+}}
+
+/* ---- HIDE DEFAULT RADIO CIRCLE ---- */
+section[data-testid="stSidebar"] div[data-testid="stRadio"] div[role="radiogroup"] input[type="radio"] {{
+    accent-color: #0284C7;
+    width: 18px;
+    height: 18px;
+    margin-right: 10px;
+    flex-shrink: 0;
+}}
+
+/* ---- DARK MODE CHECKBOX ---- */
+section[data-testid="stSidebar"] div[data-testid="stCheckbox"] label {{
+    background: {radio_bg} !important;
+    border-radius: 12px !important;
+    padding: 12px 16px !important;
+    font-weight: 600 !important;
+    font-size: 15px !important;
+    display: flex !important;
+    align-items: center !important;
+    border: 1px solid rgba(0,0,0,0.06) !important;
+    cursor: pointer !important;
+    color: {sidebar_text} !important;
+    opacity: 1 !important;
+    letter-spacing: 0 !important;
+    text-transform: none !important;
+}}
+
+/* ---- LOGOUT BUTTON ---- */
+section[data-testid="stSidebar"] div[data-testid="stButton"] button {{
+    background: linear-gradient(135deg, #2D6A4F, #D4A017) !important;
+    color: white !important;
+    border-radius: 14px !important;
+    padding: 14px 20px !important;
+    border: none !important;
+    font-weight: 700 !important;
+    font-size: 16px !important;
+    width: 100% !important;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.18) !important;
+    letter-spacing: 0.5px !important;
+}}
+section[data-testid="stSidebar"] div[data-testid="stButton"] button:hover {{
+    background: linear-gradient(135deg, #1B4D38, #B8860B) !important;
+    color: white !important;
+}}
+
+/* ---- INPUTS ---- */
 .stTextInput input, .stNumberInput input, .stTextArea textarea {{
     background-color: {card} !important;
     color: {input_text} !important;
@@ -143,6 +245,7 @@ div[data-baseweb="select"] > div {{
 }}
 div[data-baseweb="select"] * {{ color: {input_text} !important; }}
 
+/* ---- HERO ---- */
 .hero-wrap {{
     background: linear-gradient(135deg, #0EA5E9 0%, #8B5CF6 50%, #EC4899 100%);
     padding: 60px 40px 50px;
@@ -317,11 +420,6 @@ div[data-baseweb="select"] * {{ color: {input_text} !important; }}
 .stMarkdown, label, p, h1, h2, h3, h4, h5, h6, span {{
     color: {input_text} !important;
 }}
-
-/* FIX: Analytics card ko equal height karne ke liye */
-div[data-testid="column"] > div[data-testid="stVerticalBlock"] > div.element-container {{
-    height: 100%;
-}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -336,18 +434,13 @@ def build_whatsapp_file_share_button(pdf_bytes, file_name, caption):
     <div style="margin-top:12px;">
       <button id="sharePdfBtn" style="
         background:linear-gradient(135deg,#16A34A,#22C55E);
-        color:white;
-        border:none;
-        padding:12px 20px;
-        border-radius:12px;
-        cursor:pointer;
-        font-weight:700;
-        font-size:15px;
-        box-shadow:0 8px 20px rgba(34,197,94,0.25);
+        color:white; border:none; padding:12px 20px;
+        border-radius:12px; cursor:pointer; font-weight:700;
+        font-size:15px; box-shadow:0 8px 20px rgba(34,197,94,0.25);
         font-family:Arial, sans-serif;">
         📎 Share PDF File on WhatsApp
       </button>
-      <p id="shareStatus" style="font-family:Arial, sans-serif; font-size:13px; color:#475569; margin-top:8px;"></p>
+      <p id="shareStatus" style="font-family:Arial,sans-serif;font-size:13px;color:#475569;margin-top:8px;"></p>
     </div>
     <script>
     const btn = document.getElementById('sharePdfBtn');
@@ -370,11 +463,11 @@ def build_whatsapp_file_share_button(pdf_bytes, file_name, caption):
           }});
           status.innerText = 'Share panel opened. Select WhatsApp to send the PDF file.';
         }} else {{
-          status.innerText = 'Your browser does not support direct PDF file sharing. Please download the report and attach it manually in WhatsApp.';
+          status.innerText = 'Your browser does not support direct PDF file sharing.';
         }}
       }} catch (err) {{
         if (err.name !== 'AbortError') {{
-          status.innerText = 'PDF file sharing is not supported in this browser. Please download the report and attach it in WhatsApp.';
+          status.innerText = 'PDF file sharing not supported. Please download and share manually.';
         }}
       }}
     }};
@@ -433,8 +526,7 @@ def home_page():
                 Skin Thickness, and Diabetes Pedigree Function — to compute your
                 <strong>diabetes risk with a confidence score</strong>.
                 <br><br>
-                Early detection gives you the power to act <em>before</em> symptoms appear
-                and avoid long-term complications.
+                Early detection gives you the power to act <em>before</em> symptoms appear.
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -449,12 +541,10 @@ def home_page():
                 Visualize your health data through <strong>interactive bar charts,
                 glucose gauges, and BMI indicators</strong>.
                 <br><br>
-                See all key vitals — glucose, blood pressure, insulin, BMI —
-                in a clean <strong>graphical dashboard</strong> with color-coded
-                healthy vs risk zones, so you can make <em>data-driven</em>
-                decisions with your doctor.
+                See all key vitals in a clean <strong>graphical dashboard</strong>
+                with color-coded healthy vs risk zones for data-driven decisions.
                 <br><br>
-                Track changes over time and share reports with your healthcare provider easily.
+                Track changes and share reports with your healthcare provider easily.
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -467,8 +557,7 @@ def home_page():
             <div class="feat-title" style="color:{feature_txt3};">Personalized Health Suggestions</div>
             <div class="feat-desc" style="color:{feature_txt3};">
                 Unlike generic advice, GlucoTrack analyzes <strong>your specific
-                health values</strong> — high glucose, elevated BMI, raised blood
-                pressure — and gives <strong>targeted recommendations</strong>
+                health values</strong> and gives <strong>targeted recommendations</strong>
                 tailored to your risk profile.
                 <br><br>
                 Diet tips, exercise guidance, and when to consult a doctor —
@@ -525,55 +614,78 @@ if not st.session_state.started:
 # ==============================
 # SIDEBAR
 # ==============================
-st.sidebar.markdown("## 🩺 GLUCOTRACK")
-st.sidebar.caption("Smart Health Dashboard")
-st.sidebar.markdown("---")
+with st.sidebar:
+    # Logo + Title
+    st.markdown(f"""
+    <div style="display:flex; align-items:center; gap:10px; padding:20px 4px 4px 4px;">
+        <span style="font-size:32px;">🩺</span>
+        <span style="font-size:22px; font-weight:900; color:{sidebar_text}; letter-spacing:1px;">GLUCOTRACK</span>
+    </div>
+    <p style="font-size:11px; font-weight:700; letter-spacing:2px; color:{sidebar_text}; opacity:0.55;
+              text-transform:uppercase; margin:0 0 16px 4px;">Smart Health Dashboard</p>
+    """, unsafe_allow_html=True)
 
-# FIX 1: Logged-in user info — seedha dikhao, blank box nahi
-if st.session_state.logged_in:
-    st.sidebar.success(f"👤 {st.session_state.current_user_name or st.session_state.role}")
-    st.sidebar.markdown("---")
+    # Logged-in user badge
+    if st.session_state.logged_in:
+        uname = st.session_state.current_user_name or st.session_state.role
+        st.markdown(f"""
+        <div style="background:rgba(2,132,199,0.12); border-radius:12px; padding:10px 14px;
+                    margin-bottom:14px; display:flex; align-items:center; gap:8px;">
+            <span style="font-size:20px;">👤</span>
+            <span style="font-size:14px; font-weight:700; color:{sidebar_text};">{uname}</span>
+        </div>
+        """, unsafe_allow_html=True)
 
-if st.session_state.logged_in:
-    if st.session_state.role == "Admin":
-        menu_options = ["Admin Dashboard", "Prediction", "Results"]
+    st.markdown(f"<p style='font-size:12px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:{sidebar_text};opacity:0.6;margin-bottom:6px;'>Navigation</p>", unsafe_allow_html=True)
+
+    # Menu options
+    if st.session_state.logged_in:
+        if st.session_state.role == "Admin":
+            menu_options = ["Admin Dashboard", "Prediction", "Results"]
+        else:
+            menu_options = ["Prediction", "Results"]
     else:
-        menu_options = ["Prediction", "Results"]
-else:
-    menu_options = ["User Login", "Sign Up", "Admin Login"]
+        menu_options = ["User Login", "Sign Up", "Admin Login"]
 
-current_page = st.session_state.page
-if current_page not in menu_options:
-    current_page = menu_options[0]
-    st.session_state.page = current_page
+    current_page = st.session_state.page
+    if current_page not in menu_options:
+        current_page = menu_options[0]
+        st.session_state.page = current_page
+    current_index = menu_options.index(current_page)
 
-current_index = menu_options.index(current_page)
+    selected_page = st.sidebar.radio(
+        "Navigation",
+        menu_options,
+        index=current_index,
+        label_visibility="collapsed"
+    )
 
-# FIX 2: Radio button — label_visibility="collapsed" ki jagah label diya
-# taaki blank box na aaye, aur radio buttons sahi jagah dikhein
-selected_page = st.sidebar.radio(
-    "Navigation",
-    menu_options,
-    index=current_index,
-    label_visibility="collapsed"
-)
-
-if selected_page != st.session_state.page:
-    st.session_state.page = selected_page
-    st.rerun()
-
-# FIX 3: Logout pe home page pe redirect — started=False karke
-if st.session_state.logged_in:
-    st.sidebar.markdown("---")
-    if st.sidebar.button("🚪 Logout", use_container_width=True):
-        for k in ["logged_in", "role", "prediction_done", "patient_data",
-                  "prediction_result", "confidence", "pdf_bytes",
-                  "current_user_name", "current_user_email", "prediction_time"]:
-            st.session_state[k] = defaults[k]
-        # Home page pe wapas jaao — login page nahi
-        st.session_state.started = False
-        st.session_state.page = "User Login"
+    if selected_page != st.session_state.page:
+        st.session_state.page = selected_page
         st.rerun()
+
+    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+    st.markdown(f"<hr style='border:none;border-top:1px solid rgba(0,0,0,0.1);margin:4px 0 14px 0;'>", unsafe_allow_html=True)
+
+    # Dark Mode checkbox (persisted in session state)
+    new_dark = st.checkbox("🌙  Dark Mode", value=st.session_state.dark_mode)
+    if new_dark != st.session_state.dark_mode:
+        st.session_state.dark_mode = new_dark
+        st.rerun()
+
+    # Spacer push logout to bottom
+    st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
+
+    # Logout button
+    if st.session_state.logged_in:
+        if st.button("Logout", use_container_width=True):
+            for k in ["logged_in", "role", "prediction_done", "patient_data",
+                      "prediction_result", "confidence", "pdf_bytes",
+                      "current_user_name", "current_user_email", "prediction_time"]:
+                st.session_state[k] = defaults[k]
+            st.session_state.started = False
+            st.session_state.page = "User Login"
+            st.rerun()
 
 
 # ==============================
@@ -704,7 +816,6 @@ def generate_pdf_report(patient_data, result, confidence, patient_name, patient_
     pdf.drawString(40, height - 65, f"Generated: {prediction_time}")
 
     y = height - 110
-
     pdf.setFillColorRGB(0.94, 0.97, 1.0)
     pdf.rect(30, y - 55, width - 60, 62, fill=True, stroke=False)
     pdf.setFillColorRGB(0.05, 0.52, 0.78)
@@ -745,7 +856,6 @@ def generate_pdf_report(patient_data, result, confidence, patient_name, patient_
         y -= 22
 
     y -= 14
-
     pdf.setFillColorRGB(0.1, 0.1, 0.1)
     pdf.setFont("Helvetica-Bold", 13)
     pdf.drawString(40, y, "Prediction Result")
@@ -821,7 +931,6 @@ def show_patient_analytics(patient_data):
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    # FIX 4: Analytics gauges — dono ko equal height 350 kiya
     c1, c2 = st.columns(2)
     with c1:
         g = go.Figure(go.Indicator(
@@ -924,13 +1033,11 @@ def prediction_page():
     st.write("Fill in your health values below:")
 
     col1, col2 = st.columns(2)
-
     with col1:
         preg    = st.number_input("Pregnancies", 0, 20, 1)
         glucose = st.number_input("Glucose (mg/dL)", 50, 250, 120)
         bp      = st.number_input("Blood Pressure (mm Hg)", 30, 140, 70)
         skin    = st.number_input("Skin Thickness (mm)", 0, 100, 20)
-
     with col2:
         insulin = st.number_input("Insulin (μU/mL)", 0, 400, 100)
         bmi     = st.number_input("BMI", 10.0, 70.0, 25.0)
@@ -939,7 +1046,6 @@ def prediction_page():
 
     st.write("")
     if st.button("🔍 Predict Diabetes Risk", use_container_width=True):
-
         if not patient_name_input.strip():
             st.error("Please enter the patient name first.")
             st.stop()
@@ -1106,7 +1212,6 @@ def results_page():
     """, unsafe_allow_html=True)
 
     st.write("")
-
     pdf_file_name = f"glucotrack_{name.replace(' ', '_')}_report.pdf"
     share_caption = (
         f"GlucoTrack Diabetes Risk Report\n"

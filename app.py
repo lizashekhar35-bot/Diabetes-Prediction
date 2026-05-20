@@ -458,7 +458,7 @@ if not st.session_state.started:
 
 
 # ==============================
-# SIDEBAR  ← FIX: index= se current page select hogi
+# SIDEBAR  ← FIX: index= will select current page
 # ==============================
 st.sidebar.markdown("## 🩺 GLUCOTRACK")
 st.sidebar.caption("Smart Health Dashboard")
@@ -467,7 +467,7 @@ st.sidebar.markdown("---")
 if st.session_state.logged_in:
     st.sidebar.success(f"👤 {st.session_state.current_user_name or st.session_state.role}")
 
-# Menu options define karo role ke hisaab se
+# Define menu options based on role
 if st.session_state.logged_in:
     if st.session_state.role == "Admin":
         menu_options = ["Admin Dashboard", "Prediction", "Results"]
@@ -476,8 +476,8 @@ if st.session_state.logged_in:
 else:
     menu_options = ["User Login", "Sign Up", "Admin Login"]
 
-# ✅ KEY FIX: current page ka index find karo aur radio ko wahan set karo
-# Agar page menu mein nahi hai toh default to index 0
+# ✅ KEY FIX: Find current page index and set radio there
+# If page is not in menu, default to index 0
 current_page = st.session_state.page
 if current_page not in menu_options:
     current_page = menu_options[0]
@@ -485,7 +485,7 @@ if current_page not in menu_options:
 
 current_index = menu_options.index(current_page)
 
-# Radio widget — index= se current page highlight hogi
+# Radio widget — index= will highlight current page
 selected_page = st.sidebar.radio(
     "",
     menu_options,
@@ -493,8 +493,8 @@ selected_page = st.sidebar.radio(
     label_visibility="collapsed"
 )
 
-# ✅ KEY FIX: Sirf tab update karo jab user khud radio click kare
-# prediction_page() ke andar page="Results" set hota hai, woh preserve hoga
+# ✅ KEY FIX: Only update when user clicks radio themselves
+# page="Results" set inside prediction_page() will be preserved
 if selected_page != st.session_state.page:
     st.session_state.page = selected_page
     st.rerun()
@@ -833,14 +833,14 @@ def prediction_page():
 
     # ── Patient Info Section ──────────────────────────────────────
     st.markdown("### 👤 Patient Information")
-    st.caption("Aap neeche apna naam aur email edit / type kar sakte hain.")
+    st.caption("You can edit or type your name and email below.")
 
     pinfo_col1, pinfo_col2 = st.columns(2)
     with pinfo_col1:
         patient_name_input = st.text_input(
             "Patient Full Name",
             value=st.session_state.current_user_name,
-            placeholder="Apna poora naam likhein...",
+            placeholder="Enter your full name...",
         )
     with pinfo_col2:
         patient_email_input = st.text_input(
@@ -851,12 +851,12 @@ def prediction_page():
 
     # Validate name not empty
     if not patient_name_input.strip():
-        st.warning("⚠️ Patient ka naam daalna zaroori hai report ke liye.")
+        st.warning("⚠️ Patient name is required for the report.")
 
     st.markdown("---")
     # ── Clinical Parameters ───────────────────────────────────────
     st.markdown("### 🔬 Clinical Health Parameters")
-    st.write("Neeche apni health values fill karein:")
+    st.write("Fill in your health values below:")
 
     col1, col2 = st.columns(2)
 
@@ -877,10 +877,10 @@ def prediction_page():
 
         # Name validation before prediction
         if not patient_name_input.strip():
-            st.error("❌ Pehle Patient ka naam daalna zaroori hai!")
+            st.error("❌ Please enter the patient name first!")
             st.stop()
 
-        # ✅ User ne jo naam/email diya, woh use karo (session update bhi)
+        # ✅ Use the name/email provided by user (also update session)
         final_name  = patient_name_input.strip()
         final_email = patient_email_input.strip()
         st.session_state.current_user_name  = final_name
@@ -1040,10 +1040,10 @@ def results_page():
     <div style="background:linear-gradient(135deg,#dcfce7,#bbf7d0);
                 border:2px solid #4ade80; border-radius:20px; padding:22px 26px;">
         <div style="font-size:20px;font-weight:800;color:#14532d;">
-            📲 WhatsApp pe Report Bhejein
+            📲 Send Report via WhatsApp
         </div>
         <div style="font-size:13px;color:#166534;margin-top:4px;">
-            Number daalein → Button dabayein → WhatsApp khulega → Send karein
+            Enter number → Click button → WhatsApp will open → Send the message
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -1052,19 +1052,19 @@ def results_page():
     wa_col1, wa_col2 = st.columns([2, 1])
     with wa_col1:
         wa_number = st.text_input(
-            "📞 WhatsApp Number (Country Code ke saath)",
-            placeholder="91XXXXXXXXXX  ya  +91XXXXXXXXXX",
+            "📞 WhatsApp Number (with Country Code)",
+            placeholder="91XXXXXXXXXX  or  +91XXXXXXXXXX",
             key="wa_number_input"
         )
     with wa_col2:
         st.write("")
         st.write("")
-        send_wa = st.button("💬 WhatsApp Bhejein", use_container_width=True)
+        send_wa = st.button("💬 Send via WhatsApp", use_container_width=True)
 
     if send_wa:
         digits_only = wa_number.strip().replace("+", "").replace(" ", "").replace("-", "")
         if not digits_only or not digits_only.isdigit() or len(digits_only) < 10:
-            st.error("❌ Sahi number daalein. Example: 919876543210")
+            st.error("❌ Please enter a valid number. Example: 919876543210")
         else:
             suggestions      = get_suggestions(patient_data)
             suggestions_text = "\n".join([f"  • {s}" for s in suggestions])
@@ -1094,13 +1094,13 @@ def results_page():
                 f"💡 *Recommendations:*\n"
                 f"{suggestions_text}\n\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"_GlucoTrack ML Report — Doctor se zaroor milein_"
+                f"_GlucoTrack ML Report — Please consult a doctor_"
             )
 
             encoded  = urllib.parse.quote(wa_message)
-            wa_link  = f"https://wa.me/{digits_only}?text={encoded}"
+            wa_link  = f"[wa.me](https://wa.me/{digits_only}?text={encoded})"
 
-            st.success("✅ Link ready hai! Neeche green button dabayein — WhatsApp khul jaayega.")
+            st.success("✅ Link is ready! Click the green button below — WhatsApp will open.")
             st.markdown(f"""
             <div style="text-align:center; margin-top:12px;">
                 <a href="{wa_link}" target="_blank" style="
@@ -1110,10 +1110,10 @@ def results_page():
                     padding:14px 44px; border-radius:50px;
                     text-decoration:none;
                     box-shadow:0 6px 20px rgba(37,211,102,0.40);">
-                    📲 WhatsApp mein Kholein &amp; Bhejein
+                    📲 Open in WhatsApp &amp; Send
                 </a>
                 <p style="font-size:12px;color:#6b7280;margin-top:10px;">
-                    Click karne par WhatsApp Web/App khulega — sirf Send dabana hoga
+                    Clicking will open WhatsApp Web/App — just press Send
                 </p>
             </div>
             """, unsafe_allow_html=True)
@@ -1123,7 +1123,7 @@ def results_page():
 
 
 # ==============================
-# ROUTING  ← FIX: session_state.page se route karo, radio se nahi
+# ROUTING  ← FIX: route based on session_state.page, not radio
 # ==============================
 page = st.session_state.page
 

@@ -4,8 +4,6 @@ import pickle
 import base64
 from datetime import datetime
 from io import BytesIO
-import urllib.parse
-
 import plotly.graph_objects as go
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
@@ -1090,35 +1088,26 @@ def results_page():
             st.rerun()
 
     # ══════════════════════════════════════════════════════════════
-    # WHATSAPP SECTION
-    # Two options:
-    #   1. Share PDF File directly (Web Share API — works on mobile)
-    #   2. Send report summary as text via wa.me link
+    # WHATSAPP SECTION — Share PDF File directly (Web Share API)
     # ══════════════════════════════════════════════════════════════
     st.write("")
     st.markdown("""
     <div style="background:linear-gradient(135deg,#dcfce7,#bbf7d0);
                 border:2px solid #4ade80; border-radius:20px; padding:22px 26px;">
         <div style="font-size:20px;font-weight:800;color:#14532d;">
-            📲 Share Report via WhatsApp
+            📲 Share PDF Report via WhatsApp
         </div>
         <div style="font-size:13px;color:#166534;margin-top:4px;">
-            Use the PDF share button to send the actual PDF file, or enter a number to send a text summary.
+            Click the button below to share the PDF file directly. Works best on mobile browsers.
+            On desktop, please download the PDF and attach it manually in WhatsApp.
         </div>
     </div>
     """, unsafe_allow_html=True)
 
     st.write("")
 
-    # ── Option 1: PDF File Share (Web Share API) ──────────────────
-    st.markdown("#### 📎 Option 1 — Share the PDF File Directly")
-    st.caption(
-        "Click the green button below. On mobile, your browser will open a share sheet — "
-        "select WhatsApp to send the PDF file. On desktop, download the PDF and attach it manually."
-    )
-
-    pdf_file_name  = f"glucotrack_{name.replace(' ', '_')}_report.pdf"
-    share_caption  = (
+    pdf_file_name = f"glucotrack_{name.replace(' ', '_')}_report.pdf"
+    share_caption = (
         f"GlucoTrack Diabetes Risk Report\n"
         f"Patient Name: {name}\n"
         f"Email: {email}\n"
@@ -1126,81 +1115,6 @@ def results_page():
         f"Confidence: {confidence}%"
     )
     build_whatsapp_file_share_button(pdf_bytes, pdf_file_name, share_caption)
-
-    st.write("")
-
-    # ── Option 2: Text Summary via wa.me link ─────────────────────
-    st.markdown("#### 💬 Option 2 — Send Report Summary as Text")
-    st.caption("Enter a WhatsApp number with country code. A pre-filled message will open in WhatsApp.")
-
-    wa_col1, wa_col2 = st.columns([2, 1])
-    with wa_col1:
-        wa_number = st.text_input(
-            "WhatsApp Number (with Country Code)",
-            placeholder="91XXXXXXXXXX  or  +91XXXXXXXXXX",
-            key="wa_number_input"
-        )
-    with wa_col2:
-        st.write("")
-        st.write("")
-        send_wa = st.button("💬 Open in WhatsApp", use_container_width=True)
-
-    if send_wa:
-        digits_only = wa_number.strip().replace("+", "").replace(" ", "").replace("-", "")
-        if not digits_only or not digits_only.isdigit() or len(digits_only) < 10:
-            st.error("❌ Please enter a valid number with country code. Example: 919876543210")
-        else:
-            suggestions      = get_suggestions(patient_data)
-            suggestions_text = "\n".join([f"  • {s}" for s in suggestions])
-            result_emoji     = "⚠️" if "High" in result else "✅"
-
-            wa_message = (
-                f"🩺 *GlucoTrack — Diabetes Risk Report*\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                f"👤 *Patient:* {name}\n"
-                f"📧 *Email:* {email}\n"
-                f"📅 *Date:* {pred_time[:10] if pred_time else '—'}\n"
-                f"🕐 *Time:* {pred_time[11:] if pred_time else '—'}\n\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"{result_emoji} *Result: {result}*\n"
-                f"📊 *Confidence: {confidence}%*\n\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"🔬 *Health Parameters:*\n"
-                f"  • Pregnancies: {patient_data['Pregnancies']}\n"
-                f"  • Glucose: {patient_data['Glucose']} mg/dL\n"
-                f"  • Blood Pressure: {patient_data['BloodPressure']} mm Hg\n"
-                f"  • Skin Thickness: {patient_data['SkinThickness']} mm\n"
-                f"  • Insulin: {patient_data['Insulin']} uU/mL\n"
-                f"  • BMI: {patient_data['BMI']}\n"
-                f"  • Diabetes Pedigree: {patient_data['DiabetesPedigreeFunction']}\n"
-                f"  • Age: {patient_data['Age']} years\n\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"💡 *Recommendations:*\n"
-                f"{suggestions_text}\n\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"_GlucoTrack ML Report — Please consult a doctor_"
-            )
-
-            encoded = urllib.parse.quote(wa_message)
-            wa_url  = f"https://wa.me/{digits_only}?text={encoded}"
-
-            st.success("✅ Link ready! Click the button below to open WhatsApp.")
-            st.markdown(f"""
-            <div style="text-align:center; margin-top:12px;">
-                <a href="{wa_url}" target="_blank" style="
-                    display:inline-block;
-                    background:linear-gradient(135deg,#25D366,#128C7E);
-                    color:white; font-size:17px; font-weight:800;
-                    padding:14px 44px; border-radius:50px;
-                    text-decoration:none;
-                    box-shadow:0 6px 20px rgba(37,211,102,0.40);">
-                    📲 Open in WhatsApp &amp; Send
-                </a>
-                <p style="font-size:12px;color:#6b7280;margin-top:10px;">
-                    Clicking will open WhatsApp Web or the WhatsApp app. Just press Send.
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
 
     st.write("")
     st.caption("⚕️ This prediction is generated by a Machine Learning model and does not replace professional medical advice.")

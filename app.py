@@ -541,32 +541,23 @@ def home_page():
         </div>
         """, unsafe_allow_html=True)
 
-with col3:
-    st.markdown(f"""
-    <div class="feat-card" style="background:{feature_bg3}; min-height:{card_min_height};">
-        <span class="feat-tag" style="color:{feature_txt3};">Personalized</span>
-        <span class="feat-icon">💡</span>
-        <div class="feat-title" style="color:{feature_txt3};">Personalized Health Suggestions</div>
-        <div class="feat-desc" style="color:{feature_txt3};">
-            Unlike generic advice, GlucoTrack analyzes <strong>your specific
-            health values</strong> — high glucose, elevated BMI, raised blood
-            pressure — and gives <strong>targeted recommendations</strong>
-            tailored to your risk profile.
-            <br><br>
-            Diet tips, exercise guidance, and when to consult a doctor —
-            all <em>specific to you</em>, not a generic checklist.
-            <br><br>
-            The system continuously evaluates patterns in your data to help you
-            understand <strong>what changes matter most</strong> for improving your
-            long-term health. Small lifestyle adjustments suggested by GlucoTrack
-            can gradually reduce risk and support healthier daily habits.
-            <br><br>
-            Think of it as your <strong>AI health companion</strong> that turns
-            complex medical numbers into simple, practical steps you can follow
-            with confidence.
+    with col3:
+        st.markdown(f"""
+        <div class="feat-card" style="background:{feature_bg3}; min-height:{card_min_height};">
+            <span class="feat-tag" style="color:{feature_txt3};">Personalized</span>
+            <span class="feat-icon">💡</span>
+            <div class="feat-title" style="color:{feature_txt3};">Personalized Health Suggestions</div>
+            <div class="feat-desc" style="color:{feature_txt3};">
+                Unlike generic advice, GlucoTrack analyzes <strong>your specific
+                health values</strong> — high glucose, elevated BMI, raised blood
+                pressure — and gives <strong>targeted recommendations</strong>
+                tailored to your risk profile.
+                <br><br>
+                Diet tips, exercise guidance, and when to consult a doctor —
+                all <em>specific to you</em>, not a generic checklist.
+            </div>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
     st.markdown("""
     <div class="section-heading">

@@ -317,6 +317,11 @@ div[data-baseweb="select"] * {{ color: {input_text} !important; }}
 .stMarkdown, label, p, h1, h2, h3, h4, h5, h6, span {{
     color: {input_text} !important;
 }}
+
+/* FIX: Analytics card ko equal height karne ke liye */
+div[data-testid="column"] > div[data-testid="stVerticalBlock"] > div.element-container {{
+    height: 100%;
+}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -448,6 +453,8 @@ def home_page():
                 in a clean <strong>graphical dashboard</strong> with color-coded
                 healthy vs risk zones, so you can make <em>data-driven</em>
                 decisions with your doctor.
+                <br><br>
+                Track changes over time and share reports with your healthcare provider easily.
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -522,8 +529,10 @@ st.sidebar.markdown("## 🩺 GLUCOTRACK")
 st.sidebar.caption("Smart Health Dashboard")
 st.sidebar.markdown("---")
 
+# FIX 1: Logged-in user info — seedha dikhao, blank box nahi
 if st.session_state.logged_in:
     st.sidebar.success(f"👤 {st.session_state.current_user_name or st.session_state.role}")
+    st.sidebar.markdown("---")
 
 if st.session_state.logged_in:
     if st.session_state.role == "Admin":
@@ -540,8 +549,10 @@ if current_page not in menu_options:
 
 current_index = menu_options.index(current_page)
 
+# FIX 2: Radio button — label_visibility="collapsed" ki jagah label diya
+# taaki blank box na aaye, aur radio buttons sahi jagah dikhein
 selected_page = st.sidebar.radio(
-    "",
+    "Navigation",
     menu_options,
     index=current_index,
     label_visibility="collapsed"
@@ -551,12 +562,16 @@ if selected_page != st.session_state.page:
     st.session_state.page = selected_page
     st.rerun()
 
+# FIX 3: Logout pe home page pe redirect — started=False karke
 if st.session_state.logged_in:
-    if st.sidebar.button("🚪 Logout"):
+    st.sidebar.markdown("---")
+    if st.sidebar.button("🚪 Logout", use_container_width=True):
         for k in ["logged_in", "role", "prediction_done", "patient_data",
                   "prediction_result", "confidence", "pdf_bytes",
                   "current_user_name", "current_user_email", "prediction_time"]:
             st.session_state[k] = defaults[k]
+        # Home page pe wapas jaao — login page nahi
+        st.session_state.started = False
         st.session_state.page = "User Login"
         st.rerun()
 
@@ -806,6 +821,7 @@ def show_patient_analytics(patient_data):
     )
     st.plotly_chart(fig, use_container_width=True)
 
+    # FIX 4: Analytics gauges — dono ko equal height 350 kiya
     c1, c2 = st.columns(2)
     with c1:
         g = go.Figure(go.Indicator(
@@ -823,7 +839,7 @@ def show_patient_analytics(patient_data):
                 "threshold": {"line": {"color": "red", "width": 3}, "value": 126}
             }
         ))
-        g.update_layout(height=300, template=plot_template, margin=dict(t=40, b=20))
+        g.update_layout(height=350, template=plot_template, margin=dict(t=40, b=20, l=20, r=20))
         st.plotly_chart(g, use_container_width=True)
 
     with c2:
@@ -843,7 +859,7 @@ def show_patient_analytics(patient_data):
                 "threshold": {"line": {"color": "orange", "width": 3}, "value": 25}
             }
         ))
-        bg2.update_layout(height=300, template=plot_template, margin=dict(t=40, b=20))
+        bg2.update_layout(height=350, template=plot_template, margin=dict(t=40, b=20, l=20, r=20))
         st.plotly_chart(bg2, use_container_width=True)
 
 
@@ -999,7 +1015,6 @@ def results_page():
     email        = st.session_state.current_user_email
     pdf_bytes    = st.session_state.pdf_bytes
 
-    # Patient Info Card
     st.markdown(f"""
     <div class="patient-info-card">
         <div class="patient-info-row">
@@ -1023,7 +1038,6 @@ def results_page():
     </div>
     """, unsafe_allow_html=True)
 
-    # Result Banner
     if result == "High Risk of Diabetes":
         st.markdown(f"""
         <div class="result-high">
@@ -1041,7 +1055,6 @@ def results_page():
 
     st.write("")
 
-    # Parameter Summary Grid
     st.subheader("🧾 Submitted Health Parameters")
     params = list(patient_data.items())
     cols   = st.columns(4)
@@ -1060,7 +1073,6 @@ def results_page():
     show_health_suggestions(patient_data)
     st.write("")
 
-    # Action Buttons
     b1, b2 = st.columns(2)
     with b1:
         st.download_button(
@@ -1078,7 +1090,6 @@ def results_page():
             st.session_state.page = "Prediction"
             st.rerun()
 
-    # WhatsApp PDF Share
     st.write("")
     st.markdown("""
     <div style="background:linear-gradient(135deg,#dcfce7,#bbf7d0);

@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import pickle
+import base64
 from datetime import datetime
 from io import BytesIO
 import urllib.parse
@@ -320,6 +321,68 @@ div[data-baseweb="select"] * {{ color: {input_text} !important; }}
 
 
 # ==============================
+# WHATSAPP PDF FILE SHARE BUTTON
+# (Ported from Code 1 — uses Web Share API for direct PDF file sharing)
+# ==============================
+def build_whatsapp_file_share_button(pdf_bytes, file_name, caption):
+    """
+    Creates a browser-native share button that shares the PDF file directly.
+    Works best on mobile browsers that support the Web Share API with files.
+    On desktop, it falls back to a download-and-attach instruction.
+    """
+    pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
+    safe_caption = caption.replace("`", "'").replace("\\", "\\\\")
+    components.html(f"""
+    <div style="margin-top:12px;">
+      <button id="sharePdfBtn" style="
+        background:linear-gradient(135deg,#16A34A,#22C55E);
+        color:white;
+        border:none;
+        padding:12px 20px;
+        border-radius:12px;
+        cursor:pointer;
+        font-weight:700;
+        font-size:15px;
+        box-shadow:0 8px 20px rgba(34,197,94,0.25);
+        font-family:Arial, sans-serif;">
+        📎 Share PDF File on WhatsApp
+      </button>
+      <p id="shareStatus" style="font-family:Arial, sans-serif; font-size:13px; color:#475569; margin-top:8px;"></p>
+    </div>
+    <script>
+    const btn = document.getElementById('sharePdfBtn');
+    const status = document.getElementById('shareStatus');
+    btn.onclick = async () => {{
+      try {{
+        const b64 = "{pdf_b64}";
+        const byteCharacters = atob(b64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {{
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }}
+        const byteArray = new Uint8Array(byteNumbers);
+        const file = new File([byteArray], "{file_name}", {{type: 'application/pdf'}});
+        if (navigator.canShare && navigator.canShare({{ files: [file] }})) {{
+          await navigator.share({{
+            title: 'GlucoTrack Diabetes Report',
+            text: `{safe_caption}`,
+            files: [file]
+          }});
+          status.innerText = 'Share panel opened. Select WhatsApp to send the PDF file.';
+        }} else {{
+          status.innerText = 'Your browser does not support direct PDF file sharing. Please download the report and attach it manually in WhatsApp.';
+        }}
+      }} catch (err) {{
+        if (err.name !== 'AbortError') {{
+          status.innerText = 'PDF file sharing is not supported in this browser. Please download the report and attach it in WhatsApp.';
+        }}
+      }}
+    }};
+    </script>
+    """, height=100)
+
+
+# ==============================
 # HOME PAGE
 # ==============================
 def home_page():
@@ -458,7 +521,7 @@ if not st.session_state.started:
 
 
 # ==============================
-# SIDEBAR  ← FIX: index= will select current page
+# SIDEBAR
 # ==============================
 st.sidebar.markdown("## 🩺 GLUCOTRACK")
 st.sidebar.caption("Smart Health Dashboard")
@@ -467,7 +530,6 @@ st.sidebar.markdown("---")
 if st.session_state.logged_in:
     st.sidebar.success(f"👤 {st.session_state.current_user_name or st.session_state.role}")
 
-# Define menu options based on role
 if st.session_state.logged_in:
     if st.session_state.role == "Admin":
         menu_options = ["Admin Dashboard", "Prediction", "Results"]
@@ -476,8 +538,6 @@ if st.session_state.logged_in:
 else:
     menu_options = ["User Login", "Sign Up", "Admin Login"]
 
-# ✅ KEY FIX: Find current page index and set radio there
-# If page is not in menu, default to index 0
 current_page = st.session_state.page
 if current_page not in menu_options:
     current_page = menu_options[0]
@@ -485,7 +545,6 @@ if current_page not in menu_options:
 
 current_index = menu_options.index(current_page)
 
-# Radio widget — index= will highlight current page
 selected_page = st.sidebar.radio(
     "",
     menu_options,
@@ -493,8 +552,6 @@ selected_page = st.sidebar.radio(
     label_visibility="collapsed"
 )
 
-# ✅ KEY FIX: Only update when user clicks radio themselves
-# page="Results" set inside prediction_page() will be preserved
 if selected_page != st.session_state.page:
     st.session_state.page = selected_page
     st.rerun()
@@ -526,7 +583,7 @@ def user_login():
             st.session_state.page = "Prediction"
             st.rerun()
         else:
-            st.error("Invalid email ID or password")
+            st.error("Invalid email ID or password.")
 
 
 def signup():
@@ -535,13 +592,13 @@ def signup():
         col1, col2 = st.columns(2)
         with col1:
             full_name = st.text_input("Full Name")
-            email = st.text_input("Email ID")
-            phone = st.text_input("Phone Number")
-            age = st.number_input("Age", 1, 100, 25)
+            email     = st.text_input("Email ID")
+            phone     = st.text_input("Phone Number")
+            age       = st.number_input("Age", 1, 100, 25)
         with col2:
-            gender = st.selectbox("Gender", ["Female", "Male", "Other"])
-            address = st.text_area("Address")
-            new_pass = st.text_input("Create Password", type="password")
+            gender      = st.selectbox("Gender", ["Female", "Male", "Other"])
+            address     = st.text_area("Address")
+            new_pass    = st.text_input("Create Password", type="password")
             confirm_pass = st.text_input("Confirm Password", type="password")
         submit = st.form_submit_button("Create Account")
         if submit:
@@ -558,7 +615,7 @@ def signup():
 
 def admin_login():
     st.title("🛡️ Admin Login")
-    email = st.text_input("Admin Email ID")
+    email    = st.text_input("Admin Email ID")
     password = st.text_input("Admin Password", type="password")
     if st.button("Admin Login"):
         if email in st.session_state.admins and st.session_state.admins[email] == password:
@@ -569,7 +626,7 @@ def admin_login():
             st.session_state.page = "Admin Dashboard"
             st.rerun()
         else:
-            st.error("Invalid admin email or password")
+            st.error("Invalid admin email or password.")
 
 
 def admin_dashboard():
@@ -588,35 +645,35 @@ def admin_dashboard():
 # ==============================
 def get_suggestions(patient_data):
     glucose = patient_data["Glucose"]
-    bmi = patient_data["BMI"]
-    bp = patient_data["BloodPressure"]
+    bmi     = patient_data["BMI"]
+    bp      = patient_data["BloodPressure"]
     if glucose >= 126:
         return [
-            "Monitor blood glucose levels every day",
-            "Reduce sugar, sweets, and refined carbohydrates",
-            "Consult a doctor for diabetes management",
-            "Avoid sugary drinks — switch to water or herbal tea"
+            "Monitor blood glucose levels every day.",
+            "Reduce sugar, sweets, and refined carbohydrates.",
+            "Consult a doctor for diabetes management.",
+            "Avoid sugary drinks — switch to water or herbal tea."
         ]
     elif bmi >= 30:
         return [
-            "Follow a calorie-controlled and balanced diet",
-            "Exercise for at least 30 minutes daily",
-            "Track your weight and BMI weekly",
-            "Avoid fried and processed foods"
+            "Follow a calorie-controlled and balanced diet.",
+            "Exercise for at least 30 minutes daily.",
+            "Track your weight and BMI weekly.",
+            "Avoid fried and processed foods."
         ]
     elif bp > 90:
         return [
-            "Reduce sodium (salt) and processed food intake",
-            "Monitor blood pressure at home regularly",
-            "Practice yoga or meditation for stress relief",
-            "Maintain daily physical activity for heart health"
+            "Reduce sodium (salt) and processed food intake.",
+            "Monitor blood pressure at home regularly.",
+            "Practice yoga or meditation for stress relief.",
+            "Maintain daily physical activity for heart health."
         ]
     else:
         return [
-            "Maintain a balanced diet rich in vegetables and whole grains",
-            "Exercise regularly to stay active and healthy",
-            "Drink at least 8 glasses of water daily",
-            "Get 7–8 hours of quality sleep every night"
+            "Maintain a balanced diet rich in vegetables and whole grains.",
+            "Exercise regularly to stay active and healthy.",
+            "Drink at least 8 glasses of water daily.",
+            "Get 7–8 hours of quality sleep every night."
         ]
 
 
@@ -625,9 +682,10 @@ def get_suggestions(patient_data):
 # ==============================
 def generate_pdf_report(patient_data, result, confidence, patient_name, patient_email, prediction_time):
     buffer = BytesIO()
-    pdf = canvas.Canvas(buffer, pagesize=A4)
+    pdf    = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
 
+    # Header
     pdf.setFillColorRGB(0.05, 0.52, 0.78)
     pdf.rect(0, height - 80, width, 80, fill=True, stroke=False)
     pdf.setFillColorRGB(1, 1, 1)
@@ -638,6 +696,7 @@ def generate_pdf_report(patient_data, result, confidence, patient_name, patient_
 
     y = height - 110
 
+    # Patient info box
     pdf.setFillColorRGB(0.94, 0.97, 1.0)
     pdf.rect(30, y - 55, width - 60, 62, fill=True, stroke=False)
     pdf.setFillColorRGB(0.05, 0.52, 0.78)
@@ -648,6 +707,7 @@ def generate_pdf_report(patient_data, result, confidence, patient_name, patient_
     pdf.drawString(300, y - 32, f"Time:  {prediction_time[11:]}")
     y -= 78
 
+    # Health Parameters section
     pdf.setFillColorRGB(0.1, 0.1, 0.1)
     pdf.setFont("Helvetica-Bold", 13)
     pdf.drawString(40, y, "Health Parameters")
@@ -657,8 +717,8 @@ def generate_pdf_report(patient_data, result, confidence, patient_name, patient_
     pdf.line(40, y, width - 40, y)
     y -= 20
 
-    items = list(patient_data.items())
-    col2_x = width // 2 + 20
+    items   = list(patient_data.items())
+    col2_x  = width // 2 + 20
     for i in range(0, len(items), 2):
         k1, v1 = items[i]
         pdf.setFillColorRGB(0.05, 0.52, 0.78)
@@ -679,6 +739,7 @@ def generate_pdf_report(patient_data, result, confidence, patient_name, patient_
 
     y -= 14
 
+    # Prediction Result section
     pdf.setFillColorRGB(0.1, 0.1, 0.1)
     pdf.setFont("Helvetica-Bold", 13)
     pdf.drawString(40, y, "Prediction Result")
@@ -699,6 +760,7 @@ def generate_pdf_report(patient_data, result, confidence, patient_name, patient_
     pdf.drawString(55, y, f"{result}     |     Confidence: {confidence}%")
     y -= 52
 
+    # Recommendations section
     pdf.setFillColorRGB(0.1, 0.1, 0.1)
     pdf.setFont("Helvetica-Bold", 13)
     pdf.drawString(40, y, "Personalized Health Recommendations")
@@ -720,6 +782,7 @@ def generate_pdf_report(patient_data, result, confidence, patient_name, patient_
     pdf.setFont("Helvetica-Oblique", 9)
     pdf.drawString(40, y, "This report is generated by GlucoTrack ML model and does not replace professional medical advice.")
 
+    # Footer
     pdf.setFillColorRGB(0.05, 0.52, 0.78)
     pdf.rect(0, 0, width, 28, fill=True, stroke=False)
     pdf.setFillColorRGB(1, 1, 1)
@@ -738,7 +801,7 @@ def show_patient_analytics(patient_data):
     st.subheader("📊 Patient Health Analytics")
 
     metrics = ["Glucose", "BMI", "Insulin", "BloodPressure", "Age"]
-    values = [patient_data[m] for m in metrics]
+    values  = [patient_data[m] for m in metrics]
 
     fig = go.Figure()
     fig.add_trace(go.Bar(
@@ -783,10 +846,10 @@ def show_patient_analytics(patient_data):
                 "axis": {"range": [0, 70]},
                 "bar": {"color": "#4D96FF"},
                 "steps": [
-                    {"range": [0, 18.4],   "color": "#FEF9C3"},
+                    {"range": [0, 18.4],    "color": "#FEF9C3"},
                     {"range": [18.5, 24.9], "color": "#DCFCE7"},
-                    {"range": [25, 29.9],  "color": "#FEF9C3"},
-                    {"range": [30, 70],    "color": "#FFE4E6"}
+                    {"range": [25, 29.9],   "color": "#FEF9C3"},
+                    {"range": [30, 70],     "color": "#FFE4E6"}
                 ],
                 "threshold": {"line": {"color": "orange", "width": 3}, "value": 25}
             }
@@ -802,13 +865,13 @@ def show_health_suggestions(patient_data):
     suggestions = get_suggestions(patient_data)
 
     if dark_mode:
-        card_bg = "linear-gradient(135deg, #081C3A, #0D5B63)"
+        card_bg   = "linear-gradient(135deg, #081C3A, #0D5B63)"
         title_col = "#FFFFFF"
-        desc_col = "#A7F3D0"
+        desc_col  = "#A7F3D0"
     else:
-        card_bg = "linear-gradient(135deg, #EFF6FF, #DBEAFE)"
+        card_bg   = "linear-gradient(135deg, #EFF6FF, #DBEAFE)"
         title_col = "#0F172A"
-        desc_col = "#1E40AF"
+        desc_col  = "#1E40AF"
 
     items_html = "".join([f"""
     <li style="margin-bottom:10px; color:{desc_col}; font-size:15px; font-weight:500;">{s}</li>
@@ -831,7 +894,6 @@ def show_health_suggestions(patient_data):
 def prediction_page():
     st.title("🩺 Diabetes Risk Prediction")
 
-    # ── Patient Info Section ──────────────────────────────────────
     st.markdown("### 👤 Patient Information")
     st.caption("You can edit or type your name and email below.")
 
@@ -849,12 +911,10 @@ def prediction_page():
             placeholder="example@email.com",
         )
 
-    # Validate name not empty
     if not patient_name_input.strip():
         st.warning("⚠️ Patient name is required for the report.")
 
     st.markdown("---")
-    # ── Clinical Parameters ───────────────────────────────────────
     st.markdown("### 🔬 Clinical Health Parameters")
     st.write("Fill in your health values below:")
 
@@ -875,12 +935,10 @@ def prediction_page():
     st.write("")
     if st.button("🔍 Predict Diabetes Risk", use_container_width=True):
 
-        # Name validation before prediction
         if not patient_name_input.strip():
             st.error("❌ Please enter the patient name first!")
             st.stop()
 
-        # ✅ Use the name/email provided by user (also update session)
         final_name  = patient_name_input.strip()
         final_email = patient_email_input.strip()
         st.session_state.current_user_name  = final_name
@@ -894,25 +952,25 @@ def prediction_page():
         }
 
         input_raw = pd.DataFrame([patient_data])
-        input_raw["Glucose_BMI"]     = input_raw["Glucose"] * input_raw["BMI"]
-        input_raw["Insulin_Glucose"] = input_raw["Insulin"] * input_raw["Glucose"]
-        input_raw["Age_BMI"]         = input_raw["Age"] * input_raw["BMI"]
-        input_raw["BMI_Squared"]     = input_raw["BMI"] ** 2
+        input_raw["Glucose_BMI"]      = input_raw["Glucose"] * input_raw["BMI"]
+        input_raw["Insulin_Glucose"]  = input_raw["Insulin"] * input_raw["Glucose"]
+        input_raw["Age_BMI"]          = input_raw["Age"] * input_raw["BMI"]
+        input_raw["BMI_Squared"]      = input_raw["BMI"] ** 2
 
         input_encoded = pd.get_dummies(input_raw)
-        input_df = input_encoded.reindex(columns=columns, fill_value=0)
-        prediction = model.predict(input_df)
+        input_df      = input_encoded.reindex(columns=columns, fill_value=0)
+        prediction    = model.predict(input_df)
 
         if hasattr(model, "predict_proba"):
             prob = model.predict_proba(input_df)[0]
             if prediction[0] == 1:
-                result = "High Risk of Diabetes"
+                result     = "High Risk of Diabetes"
                 confidence = round(prob[1] * 100, 2)
             else:
-                result = "Low Risk of Diabetes"
+                result     = "Low Risk of Diabetes"
                 confidence = round(prob[0] * 100, 2)
         else:
-            result = "High Risk of Diabetes" if prediction[0] == 1 else "Low Risk of Diabetes"
+            result     = "High Risk of Diabetes" if prediction[0] == 1 else "Low Risk of Diabetes"
             confidence = "N/A"
 
         pred_time = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
@@ -924,9 +982,7 @@ def prediction_page():
         st.session_state.prediction_time   = pred_time
         st.session_state.pdf_bytes = generate_pdf_report(
             patient_data, result, confidence,
-            final_name,
-            final_email,
-            pred_time
+            final_name, final_email, pred_time
         )
 
         st.session_state.page = "Results"
@@ -940,7 +996,7 @@ def results_page():
     st.title("📋 Prediction Results")
 
     if not st.session_state.prediction_done:
-        st.warning("⚠️ No prediction found. Please go to **Prediction** page and submit your details first.")
+        st.warning("⚠️ No prediction found. Please go to the Prediction page and submit your details first.")
         if st.button("🔙 Go to Prediction"):
             st.session_state.page = "Prediction"
             st.rerun()
@@ -952,6 +1008,7 @@ def results_page():
     pred_time    = st.session_state.prediction_time
     name         = st.session_state.current_user_name
     email        = st.session_state.current_user_email
+    pdf_bytes    = st.session_state.pdf_bytes
 
     # Patient Info Card
     st.markdown(f"""
@@ -998,7 +1055,7 @@ def results_page():
     # Parameter Summary Grid
     st.subheader("🧾 Submitted Health Parameters")
     params = list(patient_data.items())
-    cols = st.columns(4)
+    cols   = st.columns(4)
     for i, (k, v) in enumerate(params):
         with cols[i % 4]:
             st.markdown(f"""
@@ -1014,12 +1071,12 @@ def results_page():
     show_health_suggestions(patient_data)
     st.write("")
 
-    # Action Buttons — row 1
+    # ── Action Buttons ─────────────────────────────────────────────
     b1, b2 = st.columns(2)
     with b1:
         st.download_button(
             label="📄 Download PDF Report",
-            data=st.session_state.pdf_bytes,
+            data=pdf_bytes,
             file_name=f"glucotrack_{name.replace(' ', '_')}_report.pdf",
             mime="application/pdf",
             use_container_width=True
@@ -1032,39 +1089,66 @@ def results_page():
             st.session_state.page = "Prediction"
             st.rerun()
 
-    # ══════════════════════════════════════════════
-    # WHATSAPP SECTION — SIMPLE wa.me LINK
-    # ══════════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════════
+    # WHATSAPP SECTION
+    # Two options:
+    #   1. Share PDF File directly (Web Share API — works on mobile)
+    #   2. Send report summary as text via wa.me link
+    # ══════════════════════════════════════════════════════════════
     st.write("")
     st.markdown("""
     <div style="background:linear-gradient(135deg,#dcfce7,#bbf7d0);
                 border:2px solid #4ade80; border-radius:20px; padding:22px 26px;">
         <div style="font-size:20px;font-weight:800;color:#14532d;">
-            📲 Send Report via WhatsApp
+            📲 Share Report via WhatsApp
         </div>
         <div style="font-size:13px;color:#166534;margin-top:4px;">
-            Enter number → Click button → WhatsApp will open → Send the message
+            Use the PDF share button to send the actual PDF file, or enter a number to send a text summary.
         </div>
     </div>
     """, unsafe_allow_html=True)
 
     st.write("")
+
+    # ── Option 1: PDF File Share (Web Share API) ──────────────────
+    st.markdown("#### 📎 Option 1 — Share the PDF File Directly")
+    st.caption(
+        "Click the green button below. On mobile, your browser will open a share sheet — "
+        "select WhatsApp to send the PDF file. On desktop, download the PDF and attach it manually."
+    )
+
+    pdf_file_name  = f"glucotrack_{name.replace(' ', '_')}_report.pdf"
+    share_caption  = (
+        f"GlucoTrack Diabetes Risk Report\n"
+        f"Patient Name: {name}\n"
+        f"Email: {email}\n"
+        f"Prediction Result: {result}\n"
+        f"Confidence: {confidence}%"
+    )
+    build_whatsapp_file_share_button(pdf_bytes, pdf_file_name, share_caption)
+
+    st.write("")
+
+    # ── Option 2: Text Summary via wa.me link ─────────────────────
+    st.markdown("#### 💬 Option 2 — Send Report Summary as Text")
+    st.caption("Enter a WhatsApp number with country code. A pre-filled message will open in WhatsApp.")
+
     wa_col1, wa_col2 = st.columns([2, 1])
     with wa_col1:
         wa_number = st.text_input(
-            "📞 WhatsApp Number (with Country Code)",
+            "WhatsApp Number (with Country Code)",
             placeholder="91XXXXXXXXXX  or  +91XXXXXXXXXX",
             key="wa_number_input"
         )
     with wa_col2:
         st.write("")
         st.write("")
-        send_wa = st.button("💬 Send via WhatsApp", use_container_width=True)
+        send_wa = st.button("💬 Open in WhatsApp", use_container_width=True)
 
     if send_wa:
         digits_only = wa_number.strip().replace("+", "").replace(" ", "").replace("-", "")
         if not digits_only or not digits_only.isdigit() or len(digits_only) < 10:
-            st.error("❌ Please enter a valid number. Example: 919876543210")
+            st.error("❌ Please enter a valid number with country code. Example: 919876543210")
         else:
             suggestions      = get_suggestions(patient_data)
             suggestions_text = "\n".join([f"  • {s}" for s in suggestions])
@@ -1097,13 +1181,13 @@ def results_page():
                 f"_GlucoTrack ML Report — Please consult a doctor_"
             )
 
-            encoded  = urllib.parse.quote(wa_message)
-            wa_link  = f"[wa.me](https://wa.me/{digits_only}?text={encoded})"
+            encoded = urllib.parse.quote(wa_message)
+            wa_url  = f"https://wa.me/{digits_only}?text={encoded}"
 
-            st.success("✅ Link is ready! Click the green button below — WhatsApp will open.")
+            st.success("✅ Link ready! Click the button below to open WhatsApp.")
             st.markdown(f"""
             <div style="text-align:center; margin-top:12px;">
-                <a href="{wa_link}" target="_blank" style="
+                <a href="{wa_url}" target="_blank" style="
                     display:inline-block;
                     background:linear-gradient(135deg,#25D366,#128C7E);
                     color:white; font-size:17px; font-weight:800;
@@ -1113,7 +1197,7 @@ def results_page():
                     📲 Open in WhatsApp &amp; Send
                 </a>
                 <p style="font-size:12px;color:#6b7280;margin-top:10px;">
-                    Clicking will open WhatsApp Web/App — just press Send
+                    Clicking will open WhatsApp Web or the WhatsApp app. Just press Send.
                 </p>
             </div>
             """, unsafe_allow_html=True)
@@ -1123,7 +1207,7 @@ def results_page():
 
 
 # ==============================
-# ROUTING  ← FIX: route based on session_state.page, not radio
+# ROUTING
 # ==============================
 page = st.session_state.page
 
